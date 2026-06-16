@@ -5,6 +5,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "MisinfoTracker — Community Fact-Check Platform",
   description: "Submit claims, attach evidence, and get transparent community-verified verdicts on misinformation.",
+  verification: {
+    google: "ANX-l8lict2wskSEcpHDeSb_0I7iJbFYfzmfyhocBG0",
+  },
   openGraph: {
     title: "MisinfoTracker — Community Fact-Check Platform",
     description: "Submit claims, attach evidence, and get transparent community-verified verdicts on misinformation.",

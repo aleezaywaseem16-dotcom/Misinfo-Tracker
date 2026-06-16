@@ -1,0 +1,654 @@
+"use client";
+import { FormEvent, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
+import Navbar from "@/components/Navbar";
+
+interface Claim {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  visibility: string;
+  estimated_origin_at: string;
+  created_at: string;
+  created_by: string;
+  profiles: { display_name: string; username: string; avatar_url: string | null } | null;
+  categories: { name: string } | null;
+}
+
+interface Evidence {
+  id: string;
+  title: string | null;
+  content: string | null;
+  evidence_url: string | null;
+  image_url: string | null;
+  created_at: string;
+  profiles: { display_name: string; username: string } | null;
+}
+
+interface Comment {
+  id: string;
+  content: string;
+  created_at: string;
+  parent_comment_id: string | null;
+  profiles: { display_name: string; username: string; avatar_url: string | null } | null;
+}
+
+function timeAgo(d: string) {
+  const diff = Date.now() - new Date(d).getTime();
+  const m = Math.floor(diff / 60000);
+  const h = Math.floor(diff / 3600000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  if (h < 24) return `${h}h ago`;
+  return new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+function statusRiskText(status: string) {
+  switch (status) {
+    case "confirmed": return "Impact high";
+    case "investigating": return "Investigation active";
+    case "disputed": return "Unstable claim";
+    case "unverified": return "Needs review";
+    case "debunked": return "Resolved";
+    default: return "Status unknown";
+  }
+}
+
+function confidenceScore(status: string, evidenceCount: number) {
+  const base = status === "confirmed" ? 88
+    : status === "investigating" ? 70
+    : status === "disputed" ? 62
+    : status === "unverified" ? 42
+    : status === "debunked" ? 15
+    : 38;
+  return Math.min(98, Math.max(12, base + Math.min(12, evidenceCount * 6)));
+}
+
+interface ChatMessage {
+  role: "user" | "assistant";
+  text: string;
+  confidence?: string | number | null;
+  sourceUrl?: string | null;
+}
+
+interface VoteCounts { upvotes: number; downvotes: number; }
+
+const initialChatMessages: ChatMessage[] = [
+  { role: "assistant", text: "Ask about this claim, its evidence, confidence score, or what to monitor next." },
+];
+
+const quickChatPrompts = [
+  "Summarize the strongest evidence for this claim.",
+  "Why is this claim ranked as high risk?",
+  "What follow-up action should I take on this claim?",
+];
+
+export default function ClaimDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
+  const router = useRouter();
+  const [userId, setUserId] = useState<string | null>(null);
+  const [claim, setClaim] = useState<Claim | null>(null);
+  const [evidence, setEvidence] = useState<Evidence[]>([]);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [newComment, setNewComment] = useState("");
+  const [submittingComment, setSubmittingComment] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(initialChatMessages);
+  const [voteCounts, setVoteCounts] = useState<VoteCounts>({ upvotes: 0, downvotes: 0 });
+  const [userVote, setUserVote] = useState<"upvote" | "downvote" | null>(null);
+  const [chatInput, setChatInput] = useState("");
+  const [chatSending, setChatSending] = useState(false);
+  const [chatError, setChatError] = useState("");
+  const [commentError, setCommentError] = useState("");
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const [activeTab, setActiveTab] = useState<"overview" | "evidence" | "comments">("overview");
+  const [watching, setWatching] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const loadClaim = useCallback(async () => {
+    const { data } = await supabase.from("claims")
+      .select(`id, title, description, status, visibility, estimated_origin_at, created_at, created_by, profiles!claims_created_by_fkey ( display_name, username, avatar_url ), categories ( name )`)
+      .eq("id", id).single();
+    if (data) setClaim(data as unknown as Claim);
+  }, [id]);
+
+  const loadEvidence = useCallback(async () => {
+    const { data } = await supabase.from("evidence")
+      .select(`id, title, content, evidence_url, image_url, created_at, profiles!evidence_created_by_fkey ( display_name, username )`)
+      .eq("claim_id", id).is("deleted_at", null).order("created_at", { ascending: false });
+    setEvidence((data as unknown as Evidence[]) ?? []);
+  }, [id]);
+
+  const loadVotes = useCallback(async (uid: string) => {
+    const { data: allVotes } = await supabase.from("claim_votes").select("vote_type, user_id").eq("claim_id", id);
+    if (allVotes) {
+      const votes = allVotes as Array<{ vote_type: string; user_id: string }>;
+      setVoteCounts({
+        upvotes: votes.filter((v) => v.vote_type === "upvote").length,
+        downvotes: votes.filter((v) => v.vote_type === "downvote").length,
+      });
+      const myVote = votes.find((v) => v.user_id === uid);
+      if (myVote) setUserVote(myVote.vote_type as "upvote" | "downvote");
+    }
+  }, [id]);
+
+  const loadComments = useCallback(async () => {
+    const { data } = await supabase.from("comments")
+      .select(`id, content, created_at, parent_comment_id, profiles ( display_name, username, avatar_url )`)
+      .eq("claim_id", id).is("deleted_at", null).order("created_at", { ascending: true });
+    setComments((data as unknown as Comment[]) ?? []);
+  }, [id]);
+
+  const refreshWatchState = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const stored = window.localStorage.getItem("misinfo-watchlist");
+    const list = stored ? JSON.parse(stored) : [];
+    setWatching(Array.isArray(list) ? list.includes(id) : false);
+  }, [id]);
+
+  useEffect(() => {
+    async function init() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { router.push("/login"); return; }
+      setUserId(user.id);
+      await Promise.all([loadClaim(), loadEvidence(), loadComments(), loadVotes(user.id)]);
+      refreshWatchState();
+      setLoading(false);
+    }
+    init();
+  }, [id, router, loadClaim, loadEvidence, loadComments, refreshWatchState, loadVotes]);
+
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages]);
+
+  function toggleWatch() {
+    if (typeof window === "undefined") return;
+    const stored = window.localStorage.getItem("misinfo-watchlist");
+    const list = stored ? (JSON.parse(stored) as string[]) : [];
+    const updated = Array.isArray(list) ? [...list] : [];
+    const existing = updated.indexOf(id);
+    if (existing >= 0) updated.splice(existing, 1);
+    else updated.push(id);
+    window.localStorage.setItem("misinfo-watchlist", JSON.stringify(updated));
+    setWatching(existing === -1);
+  }
+
+  async function submitComment(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!userId || !newComment.trim()) return;
+    setSubmittingComment(true);
+    try {
+      const res = await fetch('/api/comments/create', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ claim_id: id, content: newComment.trim() }),
+      });
+      const payload = await res.json();
+      if (!res.ok || payload?.error) throw new Error(payload?.error ?? 'Failed to create comment');
+      setNewComment("");
+      await loadComments();
+    } catch (err) {
+      setCommentError(err instanceof Error ? err.message : 'Failed to post comment');
+    } finally {
+      setSubmittingComment(false);
+    }
+  }
+
+  async function handleVote(type: "upvote" | "downvote") {
+    if (!userId) return;
+    try {
+      const res = await fetch('/api/votes/toggle', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ claim_id: id, vote_type: type }),
+      });
+      const payload = await res.json();
+      if (!res.ok || payload?.error) throw new Error(payload?.error ?? 'Vote failed');
+      setVoteCounts({ upvotes: payload.upvotes, downvotes: payload.downvotes });
+      setUserVote((prev) => (prev === type ? null : type));
+    } catch (err) { void err; }
+  }
+
+  const confidence = useMemo(() => confidenceScore(claim?.status ?? "unverified", evidence.length), [claim?.status, evidence.length]);
+  const evidenceSummary = evidence.slice(0, 3);
+
+  function buildChatContext(question: string) {
+    const summary = claim
+      ? `Claim: ${claim.title}\nStatus: ${claim.status}\nConfidence: ${confidence}%\nEvidence count: ${evidence.length}\nDescription: ${claim.description ?? "No description provided."}`
+      : "";
+    const evidenceText = evidence.slice(0, 3)
+      .map((item, index) => `Evidence ${index + 1}: ${item.title ?? "No title"}. ${item.content ?? "No summary available."}`)
+      .join("\n");
+    return `${summary}${evidenceText ? `\n\nTop evidence:\n${evidenceText}` : ""}\n\nUser question: ${question}`;
+  }
+
+  async function handleChatSend(message: string) {
+    if (!message.trim()) return;
+    const userMessage = message.trim();
+    setChatError("");
+    setChatMessages((current) => [...current, { role: "user", text: userMessage }]);
+    setChatInput("");
+    setChatSending(true);
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: buildChatContext(userMessage) }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error || "AI service returned an error.");
+      }
+      const payload = await response.json();
+      setChatMessages((current) => [...current, {
+        role: "assistant",
+        text: payload.response ?? "I couldn't generate a response.",
+        confidence: payload.confidence ?? null,
+        sourceUrl: payload.sourceUrl ?? null,
+      }]);
+    } catch (err) {
+      setChatError(err instanceof Error ? err.message : "Unable to contact the chat service.");
+      setChatMessages((current) => [...current, { role: "assistant", text: "I couldn't connect to the chat service. Please check configuration." }]);
+    } finally {
+      setChatSending(false);
+    }
+  }
+
+  function handleChatSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    handleChatSend(chatInput);
+  }
+
+  if (loading) return (
+    <div className="page-content" style={{ minHeight: '100vh' }}>
+      <Navbar />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
+        <div style={{ width: '32px', height: '32px', borderRadius: '50%', border: '2px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'spin 0.7s linear infinite' }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    </div>
+  );
+
+  if (!claim) return (
+    <div className="page-content" style={{ minHeight: '100vh' }}>
+      <Navbar />
+      <div style={{ textAlign: 'center', padding: '80px 24px', color: 'var(--text-muted)' }}>
+        <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🔍</div>
+        <p>Claim not found.</p>
+        <Link href="/claims" className="btn-ghost" style={{ textDecoration: 'none', marginTop: '16px', display: 'inline-flex' }}>← Back to claims</Link>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="page-content" style={{ minHeight: '100vh' }}>
+      <Navbar />
+      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '36px clamp(20px, 4vw, 64px) 72px' }}>
+
+        {/* Breadcrumb navigation bar */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', marginBottom: '28px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+            <Link href="/claims" className="btn-ghost" style={{ textDecoration: 'none', fontSize: '0.78rem', padding: '5px 10px', flexShrink: 0 }}>
+              ← Claims
+            </Link>
+            <span style={{ color: 'var(--border)' }}>/</span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {claim.title}
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+            <span className={`status-pill status-${claim.status}`}>
+              <span className="status-dot" />
+              {claim.status}
+            </span>
+            {claim.categories && (
+              <span className="mono" style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: 'var(--radius-xs)', padding: '3px 8px' }}>
+                {claim.categories.name}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Two-column layout */}
+        <div className="grid gap-6 lg:grid-cols-[1fr_360px]" style={{ alignItems: 'start' }}>
+
+          {/* ─── LEFT COLUMN: main content ─── */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0 }}>
+
+            {/* Title + Description + Meta card */}
+            <div className="card" style={{ padding: '32px 36px' }}>
+              <div className="eyebrow" style={{ marginBottom: '12px' }}>Claim Intelligence</div>
+              <h1 style={{
+                fontSize: 'clamp(1.5rem, 2.8vw, 2.2rem)', fontWeight: 800,
+                color: 'var(--text-primary)', letterSpacing: '-0.035em', lineHeight: 1.18,
+                marginBottom: '14px', fontFamily: 'var(--font-display)',
+              }}>
+                {claim.title}
+              </h1>
+              <p style={{ color: 'var(--text-secondary)', lineHeight: 1.8, fontSize: '0.95rem', maxWidth: '70ch' }}>
+                {claim.description ?? "No description was provided for this claim yet."}
+              </p>
+
+              {/* Origin date row */}
+              <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <span className="mono" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                  Origin: {new Date(claim.estimated_origin_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </span>
+                <span style={{ color: 'var(--border)' }}>·</span>
+                <span className="mono" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                  by @{claim.profiles?.username ?? 'unknown'}
+                </span>
+                <span style={{ color: 'var(--border)' }}>·</span>
+                <span className="mono" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                  {timeAgo(claim.created_at)}
+                </span>
+              </div>
+
+              {/* Confidence metrics row */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginTop: '22px' }}>
+                <div className="card" style={{ padding: '14px 16px' }}>
+                  <div className="eyebrow" style={{ marginBottom: '6px', fontSize: '0.62rem' }}>Confidence</div>
+                  <div className="data-num" style={{ fontSize: '1.5rem' }}>{confidence}%</div>
+                  <div style={{ height: 2, background: 'var(--border)', borderRadius: 2, overflow: 'hidden', marginTop: '8px' }}>
+                    <div style={{ width: `${confidence}%`, height: '100%', background: 'var(--accent)', borderRadius: 2, transition: 'width 0.6s ease' }} />
+                  </div>
+                </div>
+                <div className="card" style={{ padding: '14px 16px' }}>
+                  <div className="eyebrow" style={{ marginBottom: '6px', fontSize: '0.62rem' }}>Signal</div>
+                  <div className="data-num" style={{ fontSize: '1.5rem' }}>{evidence.length}</div>
+                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '4px', fontFamily: 'var(--font-mono)' }}>evidence items</div>
+                </div>
+                <div className="card" style={{ padding: '14px 16px' }}>
+                  <div className="eyebrow" style={{ marginBottom: '6px', fontSize: '0.62rem' }}>Watchlist</div>
+                  <div className="data-num" style={{ fontSize: '1.5rem', color: watching ? 'var(--accent)' : 'var(--text-primary)' }}>{watching ? 'ON' : 'OFF'}</div>
+                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '4px', fontFamily: 'var(--font-mono)' }}>alert active</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Evidence summary card */}
+            <div className="card" style={{ padding: '26px 30px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.18em', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>Evidence summary</div>
+                  <h2 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: '5px' }}>Key findings</h2>
+                </div>
+                <button type="button" onClick={() => setActiveTab("evidence")} className="btn-secondary" style={{ fontSize: '0.78rem', padding: '7px 14px', flexShrink: 0 }}>
+                  View all evidence
+                </button>
+              </div>
+              <p style={{ color: 'var(--text-secondary)', lineHeight: 1.75, marginBottom: '14px', fontSize: '0.88rem' }}>
+                This claim is currently being monitored for status changes and additional evidence. The dashboard uses user input and evidence submissions to surface the strongest narratives.
+              </p>
+              {evidenceSummary.length ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {evidenceSummary.map((item) => (
+                    <div key={item.id} className="card" style={{ padding: '14px 16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '6px' }}>
+                        <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {item.title ?? 'Unnamed evidence item'}
+                        </div>
+                        <span className="eyebrow" style={{ flexShrink: 0, fontSize: '0.6rem' }}>{timeAgo(item.created_at)}</span>
+                      </div>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', lineHeight: 1.6, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' } as React.CSSProperties}>
+                        {item.content ?? 'No summary text available.'}
+                      </p>
+                      {item.evidence_url && (
+                        <a href={item.evidence_url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', fontSize: '0.8rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '8px' }}>
+                          View source →
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-state">
+                  No evidence has been added yet.{' '}
+                  <Link href={`/claims/${id}/evidence/new`} style={{ color: 'var(--accent)' }}>Add the first source</Link>
+                  {' '}to improve confidence.
+                </div>
+              )}
+            </div>
+
+            {/* Community stat cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+              <button type="button" onClick={() => setActiveTab("comments")} className="card card-clickable" style={{ padding: '20px 24px', textAlign: 'left', color: 'var(--text-primary)' }}>
+                <div className="eyebrow" style={{ marginBottom: '8px' }}>Community activity</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: 800, fontFamily: 'var(--font-display)', letterSpacing: '-0.03em', lineHeight: 1 }}>{comments.length}</div>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '6px', lineHeight: 1.5 }}>comment{comments.length !== 1 ? 's' : ''} — follow the latest analysis</p>
+              </button>
+              <button type="button" onClick={() => setActiveTab("evidence")} className="card card-clickable" style={{ padding: '20px 24px', textAlign: 'left', color: 'var(--text-primary)' }}>
+                <div className="eyebrow" style={{ marginBottom: '8px' }}>Evidence collection</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: 800, fontFamily: 'var(--font-display)', letterSpacing: '-0.03em', lineHeight: 1 }}>{evidence.length}</div>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '6px', lineHeight: 1.5 }}>source{evidence.length !== 1 ? 's' : ''} — links, screenshots, and data</p>
+              </button>
+            </div>
+
+            {/* AI Chat card */}
+            <div className="card" style={{ padding: '26px 30px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                <div>
+                  <p className="eyebrow">Claim assistant</p>
+                  <h2 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: '5px' }}>Ask the AI about this claim</h2>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '7px' }}>
+                  {quickChatPrompts.map((prompt) => (
+                    <button key={prompt} type="button" onClick={() => handleChatSend(prompt)} className="filter-chip" disabled={chatSending} style={{ fontSize: '0.72rem' }}>
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="chat-window" style={{ minHeight: '260px' }}>
+                {chatMessages.map((message, index) => (
+                  <div key={`${message.role}-${index}`} className={`message-bubble ${message.role}`}>
+                    <span className="message-label">{message.role === "user" ? "You" : "Assistant"}</span>
+                    <p>{message.text}</p>
+                    {message.confidence && <div className="mono" style={{ marginTop: '8px' }}>Confidence: {message.confidence}</div>}
+                    {message.sourceUrl && (
+                      <a href={message.sourceUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', fontSize: '0.85rem', marginTop: '8px', display: 'inline-block' }}>
+                        View primary source
+                      </a>
+                    )}
+                  </div>
+                ))}
+                <div ref={chatEndRef} />
+              </div>
+              <form onSubmit={handleChatSubmit} style={{ marginTop: '16px' }}>
+                <label htmlFor="claim-chat-input" className="sr-only">Ask about this claim</label>
+                <textarea
+                  id="claim-chat-input"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      if (!chatSending && chatInput.trim()) handleChatSend(chatInput);
+                    }
+                  }}
+                  rows={3}
+                  placeholder="Ask the assistant about this claim, evidence, or next steps..."
+                  className="input-field"
+                  style={{ width: '100%' }}
+                  disabled={chatSending}
+                />
+                <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+                  <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Uses this claim's summary and top evidence.</p>
+                  <button type="submit" className="btn-primary" disabled={chatSending || !chatInput.trim()}>
+                    {chatSending ? 'Thinking...' : 'Send question'}
+                  </button>
+                </div>
+                {chatError && <p style={{ color: 'var(--danger)', marginTop: '10px', fontSize: '0.85rem' }}>{chatError}</p>}
+              </form>
+            </div>
+
+            {/* Tabs section */}
+            <div>
+              <div className="tab-bar">
+                {(["overview", "evidence", "comments"] as const).map((tab) => (
+                  <button key={tab} onClick={() => setActiveTab(tab)} className={`tab-item ${activeTab === tab ? 'active' : ''}`}>
+                    {tab === 'overview' ? 'Overview' : tab === 'evidence' ? `Evidence (${evidence.length})` : `Comments (${comments.length})`}
+                  </button>
+                ))}
+              </div>
+
+              {activeTab === "overview" && (
+                <div className="card" style={{ marginTop: '14px', padding: '24px 28px' }}>
+                  <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '10px' }}>Claim overview</h2>
+                  <p style={{ color: 'var(--text-secondary)', lineHeight: 1.8 }}>
+                    This page collects evidence, community signals and status updates into a single intelligence summary. Watch this claim to keep it on your personalized dashboard and quickly review fresh changes.
+                  </p>
+                </div>
+              )}
+
+              {activeTab === "evidence" && (
+                <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <Link href={`/claims/${id}/evidence/new`} className="btn-primary" style={{ textDecoration: 'none', fontSize: '0.82rem', padding: '8px 16px' }}>
+                      <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+                      Add Evidence
+                    </Link>
+                  </div>
+                  {evidence.length === 0 ? (
+                    <div className="empty-state">
+                      No evidence yet —{' '}
+                      <Link href={`/claims/${id}/evidence/new`} style={{ color: 'var(--accent)' }}>add a source</Link>
+                      {' '}to improve the confidence signal.
+                    </div>
+                  ) : evidence.map((item, index) => (
+                    <div key={item.id} className="evidence-card" style={{ animationDelay: `${index * 0.04}s` }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                        {item.profiles && (
+                          <span style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.16em', color: 'var(--accent)', background: 'rgba(190,242,100,0.08)', borderRadius: '999px', padding: '2px 12px' }}>
+                            @{item.profiles.display_name}
+                          </span>
+                        )}
+                        <span className="mono">{timeAgo(item.created_at)}</span>
+                        <span className="mono" style={{ marginLeft: 'auto' }}>@{item.profiles?.username ?? 'source'}</span>
+                      </div>
+                      {item.title && <h3 style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '1rem', marginBottom: '6px' }}>{item.title}</h3>}
+                      {item.content && <p style={{ color: 'var(--text-secondary)', lineHeight: 1.75 }}>{item.content}</p>}
+                      {item.evidence_url && (
+                        <a href={item.evidence_url} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--accent)', fontSize: '0.85rem', marginTop: '14px' }}>
+                          View source →
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {activeTab === "comments" && (
+                <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <form onSubmit={submitComment} className="card" style={{ padding: '20px 24px' }}>
+                    <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.14em' }}>
+                      Share an update
+                    </label>
+                    <textarea
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      placeholder="What did you find? Add context or a follow-up detail..."
+                      rows={4}
+                      className="input-field"
+                      style={{ width: '100%', marginTop: '12px', resize: 'none' }}
+                    />
+                    <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
+                      <button type="submit" disabled={submittingComment || !newComment.trim()} className="btn-primary" style={{ opacity: submittingComment || !newComment.trim() ? 0.6 : 1 }}>
+                        {submittingComment ? 'Posting...' : 'Post comment'}
+                      </button>
+                    </div>
+                    {commentError && <p style={{ color: 'var(--danger)', marginTop: '10px', fontSize: '0.85rem' }}>{commentError}</p>}
+                  </form>
+                  {comments.length === 0 ? (
+                    <div className="empty-state">No comments yet. Start the conversation.</div>
+                  ) : comments.map((comment) => (
+                    <div key={comment.id} className="card" style={{ padding: '18px 22px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
+                        <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(190,242,100,0.08)', border: '1px solid rgba(190,242,100,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontWeight: 700, fontSize: '0.9rem', flexShrink: 0 }}>
+                          {comment.profiles?.display_name?.charAt(0).toUpperCase() ?? 'U'}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>{comment.profiles?.display_name ?? 'Anonymous'}</div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{timeAgo(comment.created_at)}</div>
+                        </div>
+                      </div>
+                      <p style={{ color: 'var(--text-secondary)', lineHeight: 1.75 }}>{comment.content}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ─── RIGHT SIDEBAR ─── */}
+          <aside style={{ display: 'flex', flexDirection: 'column', gap: '14px', position: 'sticky', top: '74px' }}>
+
+            {/* Status + Risk */}
+            <div className="card" style={{ padding: '18px 20px' }}>
+              <div className="eyebrow" style={{ marginBottom: '10px' }}>Status &amp; Risk</div>
+              <span className={`status-pill status-${claim.status}`} style={{ fontSize: '0.8rem', display: 'inline-flex' }}>
+                <span className="status-dot" />
+                {claim.status}
+              </span>
+              <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)', marginTop: '10px' }}>
+                {statusRiskText(claim.status)}
+              </div>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '6px', lineHeight: 1.6 }}>
+                Combines status, evidence count, and community signal.
+              </p>
+            </div>
+
+            {/* Community vote */}
+            <div className="card" style={{ padding: '18px 20px' }}>
+              <div className="eyebrow" style={{ marginBottom: '10px' }}>Community vote</div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button type="button" onClick={() => handleVote('upvote')} className={`vote-btn up${userVote === 'upvote' ? ' active' : ''}`} style={{ flex: 1, justifyContent: 'center' }}>
+                  ▲ {voteCounts.upvotes}
+                </button>
+                <button type="button" onClick={() => handleVote('downvote')} className={`vote-btn down${userVote === 'downvote' ? ' active' : ''}`} style={{ flex: 1, justifyContent: 'center' }}>
+                  ▼ {voteCounts.downvotes}
+                </button>
+              </div>
+            </div>
+
+            {/* Watchlist */}
+            <div className="card" style={{ padding: '18px 20px' }}>
+              <div className="eyebrow" style={{ marginBottom: '10px' }}>Watchlist</div>
+              <div style={{ fontSize: '0.88rem', fontWeight: 600, color: watching ? 'var(--accent)' : 'var(--text-primary)', marginBottom: '6px' }}>
+                {watching ? '★ On your watchlist' : '☆ Not watching'}
+              </div>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', lineHeight: 1.6, marginBottom: '12px' }}>
+                Keep this claim visible on your dashboard and receive an alert badge when it changes.
+              </p>
+              <button type="button" onClick={toggleWatch} className={watching ? 'btn-primary' : 'btn-secondary'} style={{ width: '100%', justifyContent: 'center', fontSize: '0.8rem' }}>
+                {watching ? 'Remove from watchlist' : 'Add to watchlist'}
+              </button>
+            </div>
+
+            {/* Quick details */}
+            <div className="card" style={{ padding: '18px 20px' }}>
+              <div className="eyebrow" style={{ marginBottom: '10px' }}>Quick details</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+                {[
+                  { label: 'Created by', value: `@${claim.profiles?.username ?? 'unknown'}` },
+                  { label: 'Created', value: timeAgo(claim.created_at) },
+                  { label: 'Evidence', value: `${evidence.length} source${evidence.length !== 1 ? 's' : ''}` },
+                  { label: 'Visibility', value: claim.visibility },
+                ].map((row, i, arr) => (
+                  <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', padding: '8px 0', borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{row.label}</span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{row.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Add evidence CTA */}
+            <Link href={`/claims/${id}/evidence/new`} className="btn-secondary" style={{ textDecoration: 'none', width: '100%', justifyContent: 'center', fontSize: '0.8rem' }}>
+              <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+              Add Evidence
+            </Link>
+          </aside>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -405,7 +405,7 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
         </div>
 
         {/* Two-column layout */}
-        <div className="grid gap-6 lg:grid-cols-[1fr_360px]" style={{ alignItems: 'stretch' }}>
+        <div className="grid gap-6 lg:grid-cols-[1fr_360px]" style={{ alignItems: 'start' }}>
 
           {/* ─── LEFT COLUMN: main content ─── */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0 }}>
@@ -524,12 +524,12 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
 
             {/* Community stat cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: '14px' }}>
-              <button type="button" onClick={() => setActiveTab("comments")} className="card card-clickable" style={{ padding: '20px 24px', textAlign: 'left', color: 'var(--text-primary)' }}>
+              <button type="button" onClick={() => setActiveTab("comments")} className="card card-clickable" style={{ padding: '20px 24px', textAlign: 'left', color: 'var(--text-primary)', height: '100%' }}>
                 <div className="eyebrow" style={{ marginBottom: '8px' }}>Community activity</div>
                 <div style={{ fontSize: '1.6rem', fontWeight: 800, fontFamily: 'var(--font-display)', letterSpacing: '-0.03em', lineHeight: 1 }}>{comments.length}</div>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '6px', lineHeight: 1.5 }}>comment{comments.length !== 1 ? 's' : ''} — follow the latest analysis</p>
               </button>
-              <button type="button" onClick={() => setActiveTab("evidence")} className="card card-clickable" style={{ padding: '20px 24px', textAlign: 'left', color: 'var(--text-primary)' }}>
+              <button type="button" onClick={() => setActiveTab("evidence")} className="card card-clickable" style={{ padding: '20px 24px', textAlign: 'left', color: 'var(--text-primary)', height: '100%' }}>
                 <div className="eyebrow" style={{ marginBottom: '8px' }}>Evidence collection</div>
                 <div style={{ fontSize: '1.6rem', fontWeight: 800, fontFamily: 'var(--font-display)', letterSpacing: '-0.03em', lineHeight: 1 }}>{evidence.length}</div>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '6px', lineHeight: 1.5 }}>source{evidence.length !== 1 ? 's' : ''} — links, screenshots, and data</p>
@@ -538,20 +538,18 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
 
             {/* AI Chat card */}
             <div className="card" style={{ padding: '26px 30px' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', marginBottom: '16px', flexWrap: 'wrap' }}>
-                <div>
-                  <p className="eyebrow">Claim assistant</p>
-                  <h2 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: '5px' }}>Ask the AI about this claim</h2>
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '7px' }}>
-                  {quickChatPrompts.map((prompt) => (
-                    <button key={prompt} type="button" onClick={() => handleChatSend(prompt)} className="filter-chip" disabled={chatSending} style={{ fontSize: '0.72rem' }}>
-                      {prompt}
-                    </button>
-                  ))}
-                </div>
+              <div style={{ marginBottom: '14px' }}>
+                <p className="eyebrow">Claim assistant</p>
+                <h2 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: '5px' }}>Ask the AI about this claim</h2>
               </div>
-              <div className="chat-window" style={{ minHeight: '260px' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '7px', marginBottom: '16px' }}>
+                {quickChatPrompts.map((prompt) => (
+                  <button key={prompt} type="button" onClick={() => handleChatSend(prompt)} className="filter-chip" disabled={chatSending} style={{ fontSize: '0.72rem' }}>
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+              <div className="chat-window" style={{ minHeight: chatMessages.length > 1 ? '260px' : '120px' }}>
                 {chatMessages.map((message, index) => (
                   <div key={`${message.role}-${index}`} className={`message-bubble ${message.role}`}>
                     <span className="message-label">{message.role === "user" ? "You" : "Assistant"}</span>
@@ -832,6 +830,51 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
               </button>
             </div>
 
+            {/* Recent comments preview — gives the sidebar real, useful content
+                instead of stretching it artificially to match the main column */}
+            <div className="card" style={{ padding: '18px 20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                <div className="eyebrow">Recent comments</div>
+                {comments.length > 0 && (
+                  <button type="button" onClick={() => setActiveTab('comments')} style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: '0.72rem', cursor: 'pointer', padding: 0 }}>
+                    View all →
+                  </button>
+                )}
+              </div>
+              {topLevelComments.length === 0 ? (
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', lineHeight: 1.6 }}>
+                  No comments yet —{' '}
+                  <button type="button" onClick={() => setActiveTab('comments')} style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: '0.78rem', cursor: 'pointer', padding: 0 }}>
+                    start the conversation
+                  </button>.
+                </p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {topLevelComments.slice(-2).reverse().map((comment) => (
+                    <button
+                      key={comment.id}
+                      type="button"
+                      onClick={() => setActiveTab('comments')}
+                      style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', width: '100%' }}
+                    >
+                      <div style={{ width: '26px', height: '26px', borderRadius: '8px', background: 'rgba(190,242,100,0.08)', border: '1px solid rgba(190,242,100,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontWeight: 700, fontSize: '0.7rem', flexShrink: 0 }}>
+                        {comment.profiles?.display_name?.charAt(0).toUpperCase() ?? 'U'}
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                          {comment.profiles?.display_name ?? 'Anonymous'}
+                          <span className="mono" style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: '6px', fontSize: '0.68rem' }}>{timeAgo(comment.created_at)}</span>
+                        </div>
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.78rem', lineHeight: 1.5, marginTop: '2px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' } as React.CSSProperties}>
+                          {comment.content}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Quick details */}
             <div className="card" style={{ padding: '18px 20px' }}>
               <div className="eyebrow" style={{ marginBottom: '10px' }}>Quick details</div>
@@ -862,9 +905,6 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
               <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
               Add Evidence
             </Link>
-
-            {/* Absorbs leftover height so the sidebar's bottom edge lines up with the main column instead of the cards stretching apart */}
-            <div style={{ flex: 1 }} />
           </aside>
         </div>
       </div>

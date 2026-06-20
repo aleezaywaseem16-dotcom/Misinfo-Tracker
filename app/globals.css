@@ -789,9 +789,12 @@ select.input-field option { background: var(--bg-elevated); color: var(--text-pr
 }
 
 /* ── Empty state ─────────────────────────────────────────────── */
+/* was --space-16 (64px) vertical — disproportionately tall inside an
+   already-padded card, especially noticeable on the claim detail page's
+   Evidence summary card when there's no evidence yet */
 .empty-state {
   text-align: center;
-  padding: var(--space-16) var(--space-6);
+  padding: var(--space-10) var(--space-6);
   color: var(--text-muted);
   border: 1px dashed rgba(255,255,255,0.08);
   border-radius: var(--radius-sm);

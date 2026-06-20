@@ -520,6 +520,51 @@ $$;
 
 grant execute on function soft_delete_comment(uuid) to authenticated;
 
+-- Editing an existing claim (title/description/category/visibility/origin
+-- date) - same security-definer approach as soft_delete_comment, since the
+-- declarative "claims own update" RLS policy has the same unresolved
+-- overlapping-policy history as comments did and was never independently
+-- verified to actually work for a real UPDATE in this database.
+create or replace function update_claim(
+  p_claim_id uuid,
+  p_title text,
+  p_description text,
+  p_category_id uuid,
+  p_visibility text,
+  p_estimated_origin_at timestamptz
+)
+returns boolean
+language plpgsql
+security definer
+set search_path to 'public'
+as $$
+declare
+  claim_owner uuid;
+begin
+  select created_by into claim_owner from claims where id = p_claim_id and deleted_at is null;
+  if claim_owner is null then
+    return false;
+  end if;
+
+  if auth.uid() is null or (auth.uid() != claim_owner and current_user_role() not in ('admin','moderator')) then
+    raise exception 'not authorized to edit this claim';
+  end if;
+
+  update claims set
+    title = p_title,
+    description = p_description,
+    category_id = p_category_id,
+    visibility = p_visibility,
+    estimated_origin_at = p_estimated_origin_at,
+    updated_at = now()
+  where id = p_claim_id;
+
+  return true;
+end;
+$$;
+
+grant execute on function update_claim(uuid, text, text, uuid, text, timestamptz) to authenticated;
+
 -- ── votes ────────────────────────────────────────────────────
 drop policy if exists "votes public read" on claim_votes;
 drop policy if exists "votes auth upsert" on claim_votes;

@@ -401,6 +401,11 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
                 {claim.categories.name}
               </span>
             )}
+            {claim.created_by === userId && (
+              <Link href={`/claims/${id}/edit`} className="btn-ghost" style={{ textDecoration: 'none', fontSize: '0.78rem', padding: '5px 10px' }}>
+                Edit
+              </Link>
+            )}
           </div>
         </div>
 

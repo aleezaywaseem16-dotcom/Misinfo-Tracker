@@ -34,12 +34,27 @@ alter table profiles add column if not exists updated_at timestamptz not null de
 -- auto-create profile on signup
 create or replace function handle_new_user()
 returns trigger language plpgsql security definer as $$
+declare
+  base_username text;
+  candidate     text;
+  suffix        int := 0;
 begin
+  base_username := coalesce(new.raw_user_meta_data->>'preferred_username', split_part(new.email,'@',1));
+  candidate := base_username;
+
+  -- the base username (derived from the email prefix) is not guaranteed unique
+  -- across users, so probe for a free one instead of letting the insert below
+  -- fail with a unique-violation that would roll back the whole signup.
+  while exists (select 1 from profiles where username = candidate) loop
+    suffix := suffix + 1;
+    candidate := base_username || suffix::text;
+  end loop;
+
   insert into profiles (id, username, display_name, role_id)
   values (
     new.id,
-    coalesce(new.raw_user_meta_data->>'preferred_username', split_part(new.email,'@',1)),
-    coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email,'@',1)),
+    candidate,
+    coalesce(new.raw_user_meta_data->>'full_name', base_username),
     (select id from roles where name = 'user')
   )
   on conflict (id) do nothing;

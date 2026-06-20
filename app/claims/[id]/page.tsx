@@ -645,7 +645,7 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
           </div>
 
           {/* ─── RIGHT SIDEBAR ─── */}
-          <aside style={{ display: 'flex', flexDirection: 'column', gap: '14px', position: 'sticky', top: '74px' }}>
+          <aside className="lg:sticky lg:top-[74px]" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
 
             {/* Status + Risk */}
             <div className="card" style={{ padding: '18px 20px' }}>

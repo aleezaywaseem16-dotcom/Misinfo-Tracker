@@ -233,7 +233,7 @@ export default function ChatPage() {
           </div>
 
           {/* Sidebar */}
-          <aside style={{ position: "sticky", top: "74px", display: "flex", flexDirection: "column", gap: "14px" }}>
+          <aside className="lg:sticky lg:top-[74px]" style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
             <div className="card" style={{ padding: "18px 20px" }}>
               <div className="eyebrow" style={{ marginBottom: "10px" }}>How it helps</div>
               <div style={{ display: "flex", flexDirection: "column", gap: "12px", fontSize: "0.85rem", color: "var(--text-secondary)", lineHeight: 1.7 }}>

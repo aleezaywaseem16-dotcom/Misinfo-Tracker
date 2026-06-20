@@ -548,7 +548,27 @@ select.input-field option { background: var(--bg-elevated); color: var(--text-pr
   border-radius: var(--radius-sm);
 }
 
+/* ── Page spinner — shared full-page loading indicator ────────
+   was previously redefined inline (with the @keyframes duplicated
+   per-file) at inconsistent sizes (28-40px) and border widths (2-3px)
+   across pages — one consistent definition now. */
+.page-spinner-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 60vh;
+}
+.page-spinner {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  animation: spin 0.7s linear infinite;
+}
+
 /* ── Animations ─────────────────────────────────────────────── */
+@keyframes spin      { to { transform: rotate(360deg); } }
 @keyframes fade-up   { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
 @keyframes fade-in   { from { opacity:0; } to { opacity:1; } }
 @keyframes scale-in  { from { opacity:0; transform:scale(0.97); } to { opacity:1; transform:scale(1); } }
@@ -754,7 +774,7 @@ select.input-field option { background: var(--bg-elevated); color: var(--text-pr
 }
 .vote-btn:hover { border-color: var(--border-strong); color: var(--text-secondary); }
 .vote-btn.up.active   { background: var(--verified-bg); border-color: rgba(16,185,129,0.3); color: var(--verified); }
-.vote-btn.down.active { background: var(--danger-bg);   border-color: rgba(239,68,68,0.3);  color: var(--danger); }
+.vote-btn.down.active { background: var(--danger-bg);   border-color: rgba(248,113,113,0.3);  color: var(--danger); }
 
 
 /* ── Gradient text (logo only) ──────────────────────────────── */
@@ -786,6 +806,20 @@ select.input-field option { background: var(--bg-elevated); color: var(--text-pr
   background: var(--border);
   border: none;
   margin: 0;
+}
+
+/* ── Error banner — shared inline form-error styling ──────────
+   Several pages hardcoded a slightly different red (rgba(239,68,68,...),
+   roughly #ef4444) for this instead of the --danger token (#f87171),
+   so error messages didn't all match. One definition now. */
+.error-banner {
+  background: var(--danger-bg);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  border-left: 3px solid var(--danger);
+  border-radius: var(--radius-xs);
+  padding: 12px 16px;
+  font-size: 0.85rem;
+  color: var(--danger);
 }
 
 /* ── Empty state ─────────────────────────────────────────────── */

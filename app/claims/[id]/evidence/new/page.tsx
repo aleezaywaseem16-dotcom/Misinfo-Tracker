@@ -93,10 +93,9 @@ export default function AddEvidencePage({ params }: { params: Promise<{ id: stri
     return (
       <div style={{ minHeight: "100vh" }}>
         <Navbar />
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "60vh", gap: 12 }}>
-          <div style={{ width: 28, height: 28, borderRadius: "50%", border: "2px solid var(--border)", borderTopColor: "var(--accent)", animation: "spin 0.7s linear infinite" }} />
+        <div className="page-spinner-wrap" style={{ gap: 12 }}>
+          <div className="page-spinner" />
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)", letterSpacing: "0.08em" }}>LOADING...</span>
-          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
       </div>
     );
@@ -136,12 +135,12 @@ export default function AddEvidencePage({ params }: { params: Promise<{ id: stri
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
           {/* Evidence details */}
-          <div className="card" style={{ padding: "18px 20px" }}>
+          <div className="card" style={{ padding: "20px" }}>
             <div className="eyebrow" style={{ marginBottom: 14 }}>Evidence Details</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
               <div>
                 <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>Title</label>
                 <input
@@ -170,9 +169,9 @@ export default function AddEvidencePage({ params }: { params: Promise<{ id: stri
           </div>
 
           {/* Image upload */}
-          <div className="card" style={{ padding: "18px 20px" }}>
+          <div className="card" style={{ padding: "20px" }}>
             <div className="eyebrow" style={{ marginBottom: 14 }}>Screenshot / Image</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
               {form.image_url && (
                 <div style={{ position: "relative", maxWidth: 260 }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -217,9 +216,9 @@ export default function AddEvidencePage({ params }: { params: Promise<{ id: stri
           </div>
 
           {/* Source */}
-          <div className="card" style={{ padding: "18px 20px" }}>
+          <div className="card" style={{ padding: "20px" }}>
             <div className="eyebrow" style={{ marginBottom: 14 }}>Source</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
               <div>
                 <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>
                   Source URL <span style={{ color: "var(--accent)" }}>*</span>
@@ -236,12 +235,7 @@ export default function AddEvidencePage({ params }: { params: Promise<{ id: stri
           </div>
 
           {error && (
-            <div style={{
-              background: "var(--danger-bg)", border: "1px solid rgba(239,68,68,0.25)",
-              borderLeft: "3px solid var(--danger)",
-              borderRadius: "var(--radius-sm)", padding: "10px 14px",
-              fontSize: 13, color: "var(--danger)",
-            }}>
+            <div className="error-banner">
               {error}
             </div>
           )}

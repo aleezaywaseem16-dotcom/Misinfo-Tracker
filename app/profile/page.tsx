@@ -118,9 +118,8 @@ export default function ProfilePage() {
   if (loading) return (
     <div className="page-content" style={{ minHeight: "100vh" }}>
       <Navbar />
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "60vh" }}>
-        <div style={{ width: 36, height: 36, borderRadius: "50%", border: "3px solid var(--border)", borderTopColor: "var(--accent)", animation: "spin 0.7s linear infinite" }} />
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <div className="page-spinner-wrap">
+        <div className="page-spinner" />
       </div>
     </div>
   );
@@ -180,7 +179,7 @@ export default function ProfilePage() {
             </div>
           </div>
           {error && (
-            <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderLeft: '3px solid var(--danger)', borderRadius: 'var(--radius-xs)', padding: '12px 16px', fontSize: '0.85rem', color: 'var(--danger)' }}>
+            <div className="error-banner">
               {error}
             </div>
           )}

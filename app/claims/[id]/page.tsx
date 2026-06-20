@@ -357,9 +357,8 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
   if (loading) return (
     <div className="page-content" style={{ minHeight: '100vh' }}>
       <Navbar />
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
-        <div style={{ width: '32px', height: '32px', borderRadius: '50%', border: '2px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'spin 0.7s linear infinite' }} />
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <div className="page-spinner-wrap">
+        <div className="page-spinner" />
       </div>
     </div>
   );

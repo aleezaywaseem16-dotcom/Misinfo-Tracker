@@ -92,7 +92,7 @@ function SignupPage() {
                 <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" className="input-field" style={{ width: "100%" }} autoComplete="email" autoFocus />
               </div>
               {error && (
-                <div style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderLeft: "3px solid var(--danger)", borderRadius: "var(--radius-xs)", padding: "10px 14px", fontSize: "0.875rem", color: "var(--danger)" }}>{error}</div>
+                <div className="error-banner">{error}</div>
               )}
               <button type="submit" disabled={loading} className="btn-primary" style={{ width: "100%", justifyContent: "center", opacity: loading ? 0.7 : 1 }}>
                 {loading ? "Sending link..." : "Create account"}

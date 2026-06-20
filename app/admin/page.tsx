@@ -105,7 +105,7 @@ export default function AdminPage() {
         <div className="card" style={{ padding: '24px' }}>
           <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '16px' }}>Recent claims</h2>
           {statusError && (
-            <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderLeft: '3px solid var(--danger)', borderRadius: 'var(--radius-xs)', padding: '10px 14px', fontSize: '0.82rem', color: 'var(--danger)', marginBottom: '14px' }}>
+            <div className="error-banner" style={{ marginBottom: '14px' }}>
               {statusError}
             </div>
           )}

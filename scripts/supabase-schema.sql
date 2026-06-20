@@ -30,6 +30,7 @@ alter table profiles add column if not exists bio        text;
 alter table profiles add column if not exists avatar_url text;
 alter table profiles add column if not exists role_id    uuid references roles(id);
 alter table profiles add column if not exists updated_at timestamptz not null default now();
+alter table profiles add column if not exists is_banned  boolean not null default false;
 
 -- auto-create profile on signup
 create or replace function handle_new_user()
@@ -57,12 +58,13 @@ begin
   insert into roles (name) values ('user') on conflict (name) do nothing;
   select id into default_role_id from roles where name = 'user';
 
-  insert into profiles (id, username, display_name, role_id)
+  insert into profiles (id, username, display_name, role_id, is_banned)
   values (
     new.id,
     candidate,
     coalesce(new.raw_user_meta_data->>'full_name', base_username),
-    default_role_id
+    default_role_id,
+    false
   )
   on conflict (id) do nothing;
   return new;

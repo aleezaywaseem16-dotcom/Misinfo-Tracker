@@ -381,12 +381,15 @@ create policy "profiles admin all"   on profiles for all    using (current_user_
 -- policies, with an explicit WITH CHECK on UPDATE (see comments table fix
 -- above for why relying on implicit USING-as-WITH-CHECK across overlapping
 -- permissive policies is unsafe here).
-drop policy if exists "categories public read" on categories;
-drop policy if exists "categories admin write" on categories;
-drop policy if exists "categories_select"      on categories;
-drop policy if exists "categories_insert_mod"  on categories;
-drop policy if exists "categories_update_mod"  on categories;
-drop policy if exists "categories_delete_mod"  on categories;
+drop policy if exists "categories public read"  on categories;
+drop policy if exists "categories admin write"  on categories;
+drop policy if exists "categories_select"       on categories;
+drop policy if exists "categories_insert_mod"   on categories;
+drop policy if exists "categories_update_mod"   on categories;
+drop policy if exists "categories_delete_mod"   on categories;
+drop policy if exists "categories admin insert" on categories;
+drop policy if exists "categories admin update" on categories;
+drop policy if exists "categories admin delete" on categories;
 create policy "categories public read"   on categories for select using (true);
 create policy "categories admin insert"  on categories for insert with check (current_user_role() = 'admin');
 create policy "categories admin update"  on categories for update

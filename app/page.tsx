@@ -407,24 +407,25 @@ export default function HomePage() {
          */
         .lp-hero {
           display: grid;
-          grid-template-columns: 1fr 1px 1fr;
-          height: calc(100vh - 53px);
+          /* was an even 1fr/1fr split, which let the feed compete visually
+             with the headline instead of supporting it - headline column
+             now gets more weight */
+          grid-template-columns: 1.35fr 1px 1fr;
+          min-height: calc(100vh - 53px);
           max-width: 1440px;
           margin: 0 auto;
+          align-items: center;
+          padding: 4rem 0;
         }
 
-        /* Left panel */
+        /* Left panel — vertical centering now comes from .lp-hero's own
+           align-items:center, so this just needs normal padding instead of
+           the old padding-bottom:18vh centroid-shifting hack */
         .lp-hero-l {
           display: flex;
           flex-direction: column;
-          justify-content: center;
-          /*
-           * padding-bottom:18vh shifts the flex centroid upward.
-           * Result: content center sits at ~43% of viewport height
-           * on standard 768-1080px screens — matching modern SaaS norms.
-           */
-          padding: 0 4rem 18vh 4rem;
-          gap: 1.4rem;
+          padding: 0 4rem;
+          gap: 1.5rem;
         }
 
         .lp-badge {
@@ -456,10 +457,10 @@ export default function HomePage() {
         .lp-h1-em { font-style: normal; color: #bef264; }
 
         .lp-h1-sub {
-          font-size: 0.95rem;
+          font-size: 1.02rem;
           line-height: 1.7;
-          color: rgba(255,255,255,0.42);
-          max-width: 400px;
+          color: rgba(255,255,255,0.48);
+          max-width: 480px;
           margin: 0;
         }
 
@@ -488,33 +489,37 @@ export default function HomePage() {
         }
         .lp-ghost-link:hover { color: #e8eaf2; }
 
-        /* Stats row */
+        /* Stats row — was easy to miss next to the giant headline (1.45rem
+           numbers, hairline separators, no background); now reads as its
+           own showcase strip instead of a footnote */
         .lp-stats {
-          display: flex; align-items: center;
-          border-top: 1px solid rgba(255,255,255,0.07);
-          padding-top: 1.25rem;
+          display: flex; align-items: stretch;
+          margin-top: 0.5rem;
+          background: rgba(255,255,255,0.025);
+          border: 1px solid rgba(255,255,255,0.06);
+          border-radius: 4px;
           gap: 0;
         }
-        .lp-stat-wrap { display: flex; align-items: center; }
+        .lp-stat-wrap { display: flex; align-items: stretch; flex: 1; }
         .lp-stat {
-          display: flex; flex-direction: column; gap: 4px;
-          padding: 0 1.5rem 0 0;
+          display: flex; flex-direction: column; gap: 5px;
+          padding: 1.1rem 1.25rem;
+          flex: 1;
         }
-        .lp-stat-wrap:first-child .lp-stat { padding-left: 0; }
         .lp-stat-n {
           font-family: 'Space Grotesk', sans-serif;
-          font-size: 1.45rem; font-weight: 700;
+          font-size: 2.1rem; font-weight: 800;
           letter-spacing: -0.04em; color: #e8eaf2; line-height: 1;
         }
         .lp-stat-l {
           font-family: 'Space Mono', monospace;
-          font-size: 0.57rem; letter-spacing: 0.12em; text-transform: uppercase;
-          color: rgba(255,255,255,0.28);
+          font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase;
+          color: rgba(255,255,255,0.38);
         }
         .lp-stat-sep {
-          width: 1px; height: 26px;
-          background: rgba(255,255,255,0.09);
-          margin: 0 1.5rem 0 0; flex-shrink: 0;
+          width: 1px;
+          background: rgba(255,255,255,0.07);
+          flex-shrink: 0;
         }
 
         /* Vertical divider */
@@ -528,16 +533,14 @@ export default function HomePage() {
           );
         }
 
-        /* Right panel — live feed */
+        /* Right panel — live feed. Deliberately narrower and visually
+           quieter than the headline column (border instead of a filled
+           card) so it reads as supporting context, not a competing block. */
         .lp-hero-r {
           display: flex;
           flex-direction: column;
-          /*
-           * Match left panel's vertical centering:
-           * same padding-bottom:18vh keeps the feed aligned with the headline.
-           */
-          padding: 0 3.5rem 18vh 3.5rem;
-          justify-content: center;
+          padding: 2rem 3.5rem 2rem 3rem;
+          max-height: 460px;
           gap: 0.75rem;
           overflow: hidden;
         }
@@ -906,9 +909,15 @@ export default function HomePage() {
           .lp-sec { padding: 3rem 1.75rem; }
           .lp-sec-alt { padding: 3rem 1.75rem; }
           .lp-nav-inner { padding: 0 1.25rem; }
-          .lp-stats { flex-wrap: wrap; gap: 0.75rem; }
+          .lp-stats { flex-wrap: wrap; background: none; border: none; gap: 0.75rem; }
           .lp-stat-sep { display: none; }
-          .lp-stat { padding: 0; }
+          .lp-stat-wrap { flex: 1 1 40%; }
+          .lp-stat {
+            padding: 0.9rem 1rem;
+            background: rgba(255,255,255,0.025);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 4px;
+          }
         }
 
         /* ── Mobile (≤600px) ───────────────────────────────────────── */
@@ -919,6 +928,8 @@ export default function HomePage() {
           .lp-sec-num { font-size: 3rem; }
           .lp-hero-r { padding: 1.5rem 1.25rem 2.5rem; max-height: 320px; }
           .lp-nav-link { display: none; }
+          .lp-stat-wrap { flex: 1 1 100%; }
+          .lp-stat-n { font-size: 1.7rem; }
         }
       `}</style>
     </main>

@@ -57,14 +57,12 @@ function statusRiskText(status: string) {
   }
 }
 
-function confidenceScore(status: string, evidenceCount: number) {
-  const base = status === "confirmed" ? 88
-    : status === "investigating" ? 70
-    : status === "disputed" ? 62
-    : status === "unverified" ? 42
-    : status === "debunked" ? 15
-    : 38;
-  return Math.min(98, Math.max(12, base + Math.min(12, evidenceCount * 6)));
+function confidenceScore(status: string, evidenceCount: number, upvotes: number, downvotes: number): number {
+  const base: Record<string, number> = { confirmed: 70, investigating: 48, disputed: 38, unverified: 22, debunked: 10, archived: 18 };
+  const evidenceBonus = Math.min(evidenceCount * 5, 25);
+  const totalVotes = upvotes + downvotes;
+  const voteBonus = totalVotes > 0 ? Math.round((upvotes / totalVotes) * 15) : 0;
+  return Math.min(95, Math.max(5, (base[status] ?? 30) + evidenceBonus + voteBonus));
 }
 
 interface ChatMessage {
@@ -102,6 +100,8 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
   const [chatSending, setChatSending] = useState(false);
   const [chatError, setChatError] = useState("");
   const [commentError, setCommentError] = useState("");
+  const [watchError, setWatchError] = useState("");
+  const [voteError, setVoteError] = useState("");
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const [activeTab, setActiveTab] = useState<"overview" | "evidence" | "comments">("overview");
   const [watching, setWatching] = useState(false);
@@ -141,11 +141,16 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
     setComments((data as unknown as Comment[]) ?? []);
   }, [id]);
 
-  const refreshWatchState = useCallback(() => {
-    if (typeof window === "undefined") return;
-    const stored = window.localStorage.getItem("misinfo-watchlist");
-    const list = stored ? JSON.parse(stored) : [];
-    setWatching(Array.isArray(list) ? list.includes(id) : false);
+  const refreshWatchState = useCallback(async () => {
+    try {
+      const res = await fetch("/api/watchlist");
+      if (!res.ok) return;
+      const payload = await res.json();
+      const list = (payload?.watchlist ?? []) as Array<{ claim_id: string }>;
+      setWatching(list.some((row) => row.claim_id === id));
+    } catch {
+      /* ignore — watch state just won't be reflected until next load */
+    }
   }, [id]);
 
   useEffect(() => {
@@ -153,8 +158,7 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); return; }
       setUserId(user.id);
-      await Promise.all([loadClaim(), loadEvidence(), loadComments(), loadVotes(user.id)]);
-      refreshWatchState();
+      await Promise.all([loadClaim(), loadEvidence(), loadComments(), loadVotes(user.id), refreshWatchState()]);
       setLoading(false);
     }
     init();
@@ -162,16 +166,22 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages]);
 
-  function toggleWatch() {
-    if (typeof window === "undefined") return;
-    const stored = window.localStorage.getItem("misinfo-watchlist");
-    const list = stored ? (JSON.parse(stored) as string[]) : [];
-    const updated = Array.isArray(list) ? [...list] : [];
-    const existing = updated.indexOf(id);
-    if (existing >= 0) updated.splice(existing, 1);
-    else updated.push(id);
-    window.localStorage.setItem("misinfo-watchlist", JSON.stringify(updated));
-    setWatching(existing === -1);
+  async function toggleWatch() {
+    setWatchError("");
+    const nextWatching = !watching;
+    setWatching(nextWatching);
+    try {
+      const res = await fetch("/api/watchlist", {
+        method: nextWatching ? "POST" : "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ claim_id: id }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok || payload?.error) throw new Error(payload?.error ?? "Failed to update watchlist");
+    } catch (err) {
+      setWatching(!nextWatching);
+      setWatchError(err instanceof Error ? err.message : "Failed to update watchlist.");
+    }
   }
 
   async function submitComment(e: FormEvent<HTMLFormElement>) {
@@ -196,6 +206,18 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
 
   async function handleVote(type: "upvote" | "downvote") {
     if (!userId) return;
+    setVoteError("");
+
+    // Optimistic update so the count reflects the click immediately instead of waiting on the round trip.
+    const previousCounts = voteCounts;
+    const previousVote = userVote;
+    const clearing = previousVote === type;
+    const optimisticCounts = { ...previousCounts };
+    if (previousVote) optimisticCounts[previousVote === "upvote" ? "upvotes" : "downvotes"] -= 1;
+    if (!clearing) optimisticCounts[type === "upvote" ? "upvotes" : "downvotes"] += 1;
+    setVoteCounts(optimisticCounts);
+    setUserVote(clearing ? null : type);
+
     try {
       const res = await fetch('/api/votes/toggle', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -204,11 +226,14 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
       const payload = await res.json();
       if (!res.ok || payload?.error) throw new Error(payload?.error ?? 'Vote failed');
       setVoteCounts({ upvotes: payload.upvotes, downvotes: payload.downvotes });
-      setUserVote((prev) => (prev === type ? null : type));
-    } catch (err) { void err; }
+    } catch (err) {
+      setVoteCounts(previousCounts);
+      setUserVote(previousVote);
+      setVoteError(err instanceof Error ? err.message : 'Vote failed. Please try again.');
+    }
   }
 
-  const confidence = useMemo(() => confidenceScore(claim?.status ?? "unverified", evidence.length), [claim?.status, evidence.length]);
+  const confidence = useMemo(() => confidenceScore(claim?.status ?? "unverified", evidence.length, voteCounts.upvotes, voteCounts.downvotes), [claim?.status, evidence.length, voteCounts]);
   const evidenceSummary = evidence.slice(0, 3);
 
   function buildChatContext(question: string) {
@@ -281,7 +306,7 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
   return (
     <div className="page-content" style={{ minHeight: '100vh' }}>
       <Navbar />
-      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '36px clamp(20px, 4vw, 64px) 72px' }}>
+      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: 'clamp(20px, 5vw, 36px) clamp(20px, 4vw, 64px) 48px' }}>
 
         {/* Breadcrumb navigation bar */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', marginBottom: '28px', flexWrap: 'wrap' }}>
@@ -337,13 +362,13 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
                   by @{claim.profiles?.username ?? 'unknown'}
                 </span>
                 <span style={{ color: 'var(--border)' }}>·</span>
-                <span className="mono" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                  {timeAgo(claim.created_at)}
+                <span className="mono" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }} title={new Date(claim.created_at).toLocaleString()}>
+                  {timeAgo(claim.created_at)} ({new Date(claim.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })})
                 </span>
               </div>
 
               {/* Confidence metrics row */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginTop: '22px' }}>
+              <div className="grid grid-cols-1 sm:grid-cols-3" style={{ gap: '12px', marginTop: '22px' }}>
                 <div className="card" style={{ padding: '14px 16px' }}>
                   <div className="eyebrow" style={{ marginBottom: '6px', fontSize: '0.62rem' }}>Confidence</div>
                   <div className="data-num" style={{ fontSize: '1.5rem' }}>{confidence}%</div>
@@ -386,7 +411,7 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
                         <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {item.title ?? 'Unnamed evidence item'}
                         </div>
-                        <span className="eyebrow" style={{ flexShrink: 0, fontSize: '0.6rem' }}>{timeAgo(item.created_at)}</span>
+                        <span className="eyebrow" style={{ flexShrink: 0, fontSize: '0.6rem' }} title={new Date(item.created_at).toLocaleString()}>{timeAgo(item.created_at)}</span>
                       </div>
                       <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', lineHeight: 1.6, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' } as React.CSSProperties}>
                         {item.content ?? 'No summary text available.'}
@@ -409,7 +434,7 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
             </div>
 
             {/* Community stat cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+            <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: '14px' }}>
               <button type="button" onClick={() => setActiveTab("comments")} className="card card-clickable" style={{ padding: '20px 24px', textAlign: 'left', color: 'var(--text-primary)' }}>
                 <div className="eyebrow" style={{ marginBottom: '8px' }}>Community activity</div>
                 <div style={{ fontSize: '1.6rem', fontWeight: 800, fontFamily: 'var(--font-display)', letterSpacing: '-0.03em', lineHeight: 1 }}>{comments.length}</div>
@@ -471,7 +496,7 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
                   disabled={chatSending}
                 />
                 <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-                  <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Uses this claim's summary and top evidence.</p>
+                  <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Uses this claim&apos;s summary and top evidence.</p>
                   <button type="submit" className="btn-primary" disabled={chatSending || !chatInput.trim()}>
                     {chatSending ? 'Thinking...' : 'Send question'}
                   </button>
@@ -521,10 +546,14 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
                             @{item.profiles.display_name}
                           </span>
                         )}
-                        <span className="mono">{timeAgo(item.created_at)}</span>
+                        <span className="mono" title={new Date(item.created_at).toLocaleString()}>{timeAgo(item.created_at)}</span>
                         <span className="mono" style={{ marginLeft: 'auto' }}>@{item.profiles?.username ?? 'source'}</span>
                       </div>
                       {item.title && <h3 style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '1rem', marginBottom: '6px' }}>{item.title}</h3>}
+                      {item.image_url && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={item.image_url} alt={item.title ?? 'Evidence image'} style={{ maxWidth: '100%', maxHeight: 320, borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', display: 'block', marginBottom: '10px' }} />
+                      )}
                       {item.content && <p style={{ color: 'var(--text-secondary)', lineHeight: 1.75 }}>{item.content}</p>}
                       {item.evidence_url && (
                         <a href={item.evidence_url} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--accent)', fontSize: '0.85rem', marginTop: '14px' }}>
@@ -567,7 +596,7 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
                         </div>
                         <div>
                           <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>{comment.profiles?.display_name ?? 'Anonymous'}</div>
-                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{timeAgo(comment.created_at)}</div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }} title={new Date(comment.created_at).toLocaleString()}>{timeAgo(comment.created_at)}</div>
                         </div>
                       </div>
                       <p style={{ color: 'var(--text-secondary)', lineHeight: 1.75 }}>{comment.content}</p>
@@ -607,6 +636,7 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
                   ▼ {voteCounts.downvotes}
                 </button>
               </div>
+              {voteError && <p style={{ color: 'var(--danger)', marginTop: '10px', fontSize: '0.78rem' }}>{voteError}</p>}
             </div>
 
             {/* Watchlist */}
@@ -616,8 +646,9 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
                 {watching ? '★ On your watchlist' : '☆ Not watching'}
               </div>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', lineHeight: 1.6, marginBottom: '12px' }}>
-                Keep this claim visible on your dashboard and receive an alert badge when it changes.
+                Keep this claim visible on your dashboard and receive an alert badge when it changes. View all watched claims on your <Link href="/watchlist" style={{ color: 'var(--accent)' }}>Watchlist page</Link>.
               </p>
+              {watchError && <p style={{ color: 'var(--danger)', marginBottom: '10px', fontSize: '0.78rem' }}>{watchError}</p>}
               <button type="button" onClick={toggleWatch} className={watching ? 'btn-primary' : 'btn-secondary'} style={{ width: '100%', justifyContent: 'center', fontSize: '0.8rem' }}>
                 {watching ? 'Remove from watchlist' : 'Add to watchlist'}
               </button>

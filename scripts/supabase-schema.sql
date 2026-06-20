@@ -62,6 +62,8 @@ create table if not exists categories (
 );
 alter table categories add column if not exists description text;
 alter table categories add column if not exists color       text default '#6366f1';
+alter table categories add column if not exists created_by  uuid references profiles(id) on delete set null;
+alter table categories add column if not exists deleted_at  timestamptz;
 
 insert into categories (name, description, color) values
   ('Health',       'Medical and health-related misinformation',  '#ef4444'),
@@ -82,6 +84,8 @@ create table if not exists tags (
   name       text not null unique,
   created_at timestamptz not null default now()
 );
+alter table tags add column if not exists created_by uuid references profiles(id) on delete set null;
+alter table tags add column if not exists deleted_at timestamptz;
 
 -- ============================================================
 -- CLAIMS
@@ -97,16 +101,28 @@ alter table claims add column if not exists description         text;
 alter table claims add column if not exists source_url          text;
 alter table claims add column if not exists source_type         text default 'other';
 alter table claims add column if not exists category_id         uuid references categories(id);
-alter table claims add column if not exists submitted_by        uuid references profiles(id) on delete set null;
 alter table claims add column if not exists estimated_origin_at timestamptz;
 alter table claims add column if not exists deleted_at          timestamptz;
 alter table claims add column if not exists updated_at          timestamptz not null default now();
 
-create index if not exists claims_status_idx       on claims(status);
-create index if not exists claims_visibility_idx   on claims(visibility);
-create index if not exists claims_category_idx     on claims(category_id);
-create index if not exists claims_submitted_by_idx on claims(submitted_by);
-create index if not exists claims_title_trgm_idx   on claims using gin (title gin_trgm_ops);
+-- legacy column rename (older deployments used "submitted_by"; app code expects "created_by")
+do $$ begin
+  if exists (select 1 from information_schema.columns where table_name = 'claims' and column_name = 'submitted_by')
+     and not exists (select 1 from information_schema.columns where table_name = 'claims' and column_name = 'created_by') then
+    alter table claims rename column submitted_by to created_by;
+  end if;
+  if exists (select 1 from pg_constraint where conrelid = 'claims'::regclass and conname = 'claims_submitted_by_fkey')
+     and not exists (select 1 from pg_constraint where conrelid = 'claims'::regclass and conname = 'claims_created_by_fkey') then
+    alter table claims rename constraint claims_submitted_by_fkey to claims_created_by_fkey;
+  end if;
+end $$;
+alter table claims add column if not exists created_by uuid references profiles(id) on delete set null;
+
+create index if not exists claims_status_idx     on claims(status);
+create index if not exists claims_visibility_idx on claims(visibility);
+create index if not exists claims_category_idx   on claims(category_id);
+create index if not exists claims_created_by_idx on claims(created_by);
+create index if not exists claims_title_trgm_idx on claims using gin (title gin_trgm_ops);
 
 -- ============================================================
 -- CLAIM TAGS
@@ -116,6 +132,43 @@ create table if not exists claim_tags (
   tag_id   uuid not null references tags(id)   on delete cascade,
   primary key (claim_id, tag_id)
 );
+alter table claim_tags add column if not exists added_by  uuid references profiles(id) on delete set null;
+alter table claim_tags add column if not exists created_at timestamptz not null default now();
+
+-- ============================================================
+-- PLATFORMS
+-- ============================================================
+create table if not exists platforms (
+  id         uuid primary key default uuid_generate_v4(),
+  name       text not null unique,
+  created_at timestamptz not null default now()
+);
+alter table platforms add column if not exists slug      text;
+alter table platforms add column if not exists icon_url  text;
+alter table platforms add column if not exists base_url  text;
+alter table platforms add column if not exists is_active boolean not null default true;
+
+do $$ begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'platforms'::regclass and conname = 'platforms_slug_key'
+  ) then
+    -- backfill slug for any pre-existing rows before enforcing uniqueness
+    update platforms set slug = lower(regexp_replace(name, '[^a-zA-Z0-9]+', '-', 'g')) where slug is null;
+    alter table platforms add constraint platforms_slug_key unique (slug);
+  end if;
+end $$;
+
+insert into platforms (name, slug, base_url) values
+  ('Twitter / X', 'x',         'https://x.com'),
+  ('Facebook',    'facebook',  'https://facebook.com'),
+  ('Instagram',   'instagram', 'https://instagram.com'),
+  ('TikTok',      'tiktok',    'https://tiktok.com'),
+  ('YouTube',     'youtube',   'https://youtube.com'),
+  ('Reddit',      'reddit',    'https://reddit.com'),
+  ('News article','news',      null),
+  ('Other',       'other',     null)
+on conflict (name) do nothing;
 
 -- ============================================================
 -- EVIDENCE
@@ -123,17 +176,36 @@ create table if not exists claim_tags (
 create table if not exists evidence (
   id         uuid primary key default uuid_generate_v4(),
   claim_id   uuid not null references claims(id) on delete cascade,
-  title      text not null,
+  title      text,
   created_at timestamptz not null default now()
 );
-alter table evidence add column if not exists submitted_by uuid references profiles(id) on delete set null;
+alter table evidence alter column title drop not null;
 alter table evidence add column if not exists description  text;
 alter table evidence add column if not exists url          text;
 alter table evidence add column if not exists type         text default 'link';
 alter table evidence add column if not exists supports     boolean;
 alter table evidence add column if not exists deleted_at   timestamptz;
+alter table evidence add column if not exists updated_at   timestamptz not null default now();
+alter table evidence add column if not exists content      text;
+alter table evidence add column if not exists evidence_url text;
+alter table evidence add column if not exists image_url    text;
+alter table evidence add column if not exists platform_id  uuid references platforms(id) on delete set null;
 
-create index if not exists evidence_claim_idx on evidence(claim_id);
+do $$ begin
+  if exists (select 1 from information_schema.columns where table_name = 'evidence' and column_name = 'submitted_by')
+     and not exists (select 1 from information_schema.columns where table_name = 'evidence' and column_name = 'created_by') then
+    alter table evidence rename column submitted_by to created_by;
+  end if;
+  if exists (select 1 from pg_constraint where conrelid = 'evidence'::regclass and conname = 'evidence_submitted_by_fkey')
+     and not exists (select 1 from pg_constraint where conrelid = 'evidence'::regclass and conname = 'evidence_created_by_fkey') then
+    alter table evidence rename constraint evidence_submitted_by_fkey to evidence_created_by_fkey;
+  end if;
+end $$;
+alter table evidence add column if not exists created_by uuid references profiles(id) on delete set null;
+
+create index if not exists evidence_claim_idx      on evidence(claim_id);
+create index if not exists evidence_created_by_idx on evidence(created_by);
+create index if not exists evidence_platform_idx   on evidence(platform_id);
 
 -- ============================================================
 -- COMMENTS
@@ -144,12 +216,36 @@ create table if not exists comments (
   content    text not null,
   created_at timestamptz not null default now()
 );
-alter table comments add column if not exists author_id  uuid references profiles(id) on delete set null;
-alter table comments add column if not exists parent_id  uuid references comments(id) on delete cascade;
 alter table comments add column if not exists deleted_at timestamptz;
 alter table comments add column if not exists updated_at timestamptz not null default now();
 
-create index if not exists comments_claim_idx on comments(claim_id);
+do $$ begin
+  if exists (select 1 from information_schema.columns where table_name = 'comments' and column_name = 'author_id')
+     and not exists (select 1 from information_schema.columns where table_name = 'comments' and column_name = 'created_by') then
+    alter table comments rename column author_id to created_by;
+  end if;
+  if exists (select 1 from pg_constraint where conrelid = 'comments'::regclass and conname = 'comments_author_id_fkey')
+     and not exists (select 1 from pg_constraint where conrelid = 'comments'::regclass and conname = 'comments_created_by_fkey') then
+    alter table comments rename constraint comments_author_id_fkey to comments_created_by_fkey;
+  end if;
+end $$;
+alter table comments add column if not exists created_by uuid references profiles(id) on delete set null;
+
+do $$ begin
+  if exists (select 1 from information_schema.columns where table_name = 'comments' and column_name = 'parent_id')
+     and not exists (select 1 from information_schema.columns where table_name = 'comments' and column_name = 'parent_comment_id') then
+    alter table comments rename column parent_id to parent_comment_id;
+  end if;
+  if exists (select 1 from pg_constraint where conrelid = 'comments'::regclass and conname = 'comments_parent_id_fkey')
+     and not exists (select 1 from pg_constraint where conrelid = 'comments'::regclass and conname = 'comments_parent_comment_id_fkey') then
+    alter table comments rename constraint comments_parent_id_fkey to comments_parent_comment_id_fkey;
+  end if;
+end $$;
+alter table comments add column if not exists parent_comment_id uuid references comments(id) on delete cascade;
+
+create index if not exists comments_claim_idx     on comments(claim_id);
+create index if not exists comments_created_by_idx on comments(created_by);
+create index if not exists comments_parent_idx    on comments(parent_comment_id);
 
 -- ============================================================
 -- VOTES
@@ -253,15 +349,18 @@ create policy "tags admin delete" on tags for delete using (current_user_role() 
 
 -- ── claims ───────────────────────────────────────────────────
 drop policy if exists "claims public read" on claims;
+drop policy if exists "claims own read"    on claims;
 drop policy if exists "claims auth insert" on claims;
 drop policy if exists "claims own update"  on claims;
 drop policy if exists "claims mod delete"  on claims;
 create policy "claims public read" on claims for select
   using (visibility = 'public' and deleted_at is null);
+create policy "claims own read" on claims for select
+  using (auth.uid() = created_by or current_user_role() in ('admin','moderator'));
 create policy "claims auth insert" on claims for insert
-  with check (auth.uid() is not null and submitted_by = auth.uid());
+  with check (auth.uid() is not null and created_by = auth.uid());
 create policy "claims own update" on claims for update
-  using (auth.uid() = submitted_by or current_user_role() in ('admin','moderator'));
+  using (auth.uid() = created_by or current_user_role() in ('admin','moderator'));
 create policy "claims mod delete" on claims for delete
   using (current_user_role() in ('admin','moderator'));
 
@@ -280,9 +379,9 @@ drop policy if exists "evidence own update"  on evidence;
 drop policy if exists "evidence mod delete"  on evidence;
 create policy "evidence public read" on evidence for select using (deleted_at is null);
 create policy "evidence auth insert" on evidence for insert
-  with check (auth.uid() is not null and submitted_by = auth.uid());
+  with check (auth.uid() is not null and created_by = auth.uid());
 create policy "evidence own update"  on evidence for update
-  using (auth.uid() = submitted_by or current_user_role() in ('admin','moderator'));
+  using (auth.uid() = created_by or current_user_role() in ('admin','moderator'));
 create policy "evidence mod delete"  on evidence for delete
   using (current_user_role() in ('admin','moderator'));
 
@@ -293,9 +392,9 @@ drop policy if exists "comments own update"  on comments;
 drop policy if exists "comments mod delete"  on comments;
 create policy "comments public read" on comments for select using (deleted_at is null);
 create policy "comments auth insert" on comments for insert
-  with check (auth.uid() is not null and author_id = auth.uid());
+  with check (auth.uid() is not null and created_by = auth.uid());
 create policy "comments own update"  on comments for update
-  using (auth.uid() = author_id or current_user_role() in ('admin','moderator'));
+  using (auth.uid() = created_by or current_user_role() in ('admin','moderator'));
 create policy "comments mod delete"  on comments for delete
   using (current_user_role() in ('admin','moderator'));
 
@@ -312,9 +411,11 @@ create policy "votes own delete"  on claim_votes for delete
 -- ── user_watchlist ───────────────────────────────────────────
 drop policy if exists "watchlist own read"   on user_watchlist;
 drop policy if exists "watchlist own insert" on user_watchlist;
+drop policy if exists "watchlist own update" on user_watchlist;
 drop policy if exists "watchlist own delete" on user_watchlist;
 create policy "watchlist own read"   on user_watchlist for select using (auth.uid() = user_id);
 create policy "watchlist own insert" on user_watchlist for insert with check (auth.uid() = user_id);
+create policy "watchlist own update" on user_watchlist for update using (auth.uid() = user_id);
 create policy "watchlist own delete" on user_watchlist for delete using (auth.uid() = user_id);
 
 -- ── user_chat_history ────────────────────────────────────────
@@ -324,3 +425,20 @@ drop policy if exists "chat history own delete" on user_chat_history;
 create policy "chat history own read"   on user_chat_history for select using (auth.uid() = user_id);
 create policy "chat history own insert" on user_chat_history for insert with check (auth.uid() = user_id);
 create policy "chat history own delete" on user_chat_history for delete using (auth.uid() = user_id);
+
+-- ============================================================
+-- STORAGE — evidence images
+-- ============================================================
+insert into storage.buckets (id, name, public)
+values ('evidence-images', 'evidence-images', true)
+on conflict (id) do nothing;
+
+drop policy if exists "evidence images public read" on storage.objects;
+drop policy if exists "evidence images auth upload" on storage.objects;
+drop policy if exists "evidence images own delete"  on storage.objects;
+create policy "evidence images public read" on storage.objects for select
+  using (bucket_id = 'evidence-images');
+create policy "evidence images auth upload" on storage.objects for insert
+  with check (bucket_id = 'evidence-images' and auth.uid() is not null);
+create policy "evidence images own delete" on storage.objects for delete
+  using (bucket_id = 'evidence-images' and owner = auth.uid());

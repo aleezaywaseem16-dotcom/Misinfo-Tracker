@@ -1,6 +1,7 @@
 'use client'
 
 import { supabase } from "@/lib/supabase"
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
@@ -50,10 +51,12 @@ export default function HomePage() {
   const [claims, setClaims] = useState<LiveClaim[]>([])
   const [stats, setStats] = useState<Stats>({ total: 0, investigating: 0, evidenceSources: 0, verdicts: 0 })
   const [loading, setLoading] = useState(true)
+  const [checkingSession, setCheckingSession] = useState(true)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) router.replace('/dashboard')
+      else setCheckingSession(false)
     })
 
     async function load() {
@@ -93,18 +96,27 @@ export default function HomePage() {
 
   const feedClaims = claims.length >= 2 ? [...claims, ...claims] : claims
 
+  if (checkingSession) {
+    return (
+      <main className="lp" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: 36, height: 36, borderRadius: '50%', border: '2px solid rgba(190,242,100,0.15)', borderTopColor: '#bef264', animation: 'cb-spin 0.8s linear infinite' }} />
+        <style>{`@keyframes cb-spin { to { transform: rotate(360deg); } }`}</style>
+      </main>
+    )
+  }
+
   return (
     <main className="lp">
 
       {/* ━━━ NAV ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <nav className="lp-nav">
         <div className="lp-nav-inner">
-          <a href="/" className="lp-logo">
+          <Link href="/" className="lp-logo">
             <span className="lp-bracket">[</span>MISINFO<span className="lp-lo-accent">TRACKER</span><span className="lp-bracket">]</span>
-          </a>
+          </Link>
           <div className="lp-nav-r">
-            <a href="/claims" className="lp-nav-link">Browse Claims</a>
-            <a href="/login" className="lp-nav-cta">Sign In →</a>
+            <Link href="/claims" className="lp-nav-link">Browse Claims</Link>
+            <Link href="/login" className="lp-nav-cta">Sign In →</Link>
           </div>
         </div>
         <div className="lp-nav-underline" />
@@ -128,8 +140,8 @@ export default function HomePage() {
           </p>
 
           <div className="lp-hero-actions">
-            <a href="/login" className="lp-cta-btn">Start Investigating</a>
-            <a href="/claims" className="lp-ghost-link">Browse Claims →</a>
+            <Link href="/login" className="lp-cta-btn">Start Investigating</Link>
+            <Link href="/claims" className="lp-ghost-link">Browse Claims →</Link>
           </div>
 
           {/* Stats row */}
@@ -176,7 +188,7 @@ export default function HomePage() {
                   <div key={`${c.id}-${i}`} className={`lp-feed-row${i === 0 ? ' lp-feed-row-latest' : ''}`}>
                     <div className="lp-feed-row-top">
                       <span className="lp-feed-id">{c.id.slice(0, 8).toUpperCase()}</span>
-                      <span className="lp-feed-t">{timeAgo(c.created_at)}</span>
+                      <span className="lp-feed-t" title={new Date(c.created_at).toLocaleString()}>{timeAgo(c.created_at)}</span>
                     </div>
                     <div className="lp-feed-title">{c.title}</div>
                     <div className="lp-feed-meta">
@@ -219,7 +231,7 @@ export default function HomePage() {
             <span className="lp-sec-eye">Investigation Board</span>
             <h2 className="lp-sec-title">Claims Under Review</h2>
           </div>
-          <a href="/claims" className="lp-sec-link">View all →</a>
+          <Link href="/claims" className="lp-sec-link">View all →</Link>
         </div>
 
         <div className="lp-table">
@@ -239,15 +251,15 @@ export default function HomePage() {
                 </div>
               ))
             : claims.slice(0, 5).map((c) => (
-                <a key={c.id} href={`/claims/${c.id}`} className="lp-table-row lp-table-row-link">
+                <Link key={c.id} href={`/claims/${c.id}`} className="lp-table-row lp-table-row-link">
                   <span className="lp-td-id">{c.id.slice(0, 8).toUpperCase()}</span>
                   <span className="lp-td-title">{c.title}</span>
                   <span className="lp-td-status">
                     <span className="lp-td-dot" style={{ background: S_COLOR[c.status] ?? '#64748b' }} />
                     <span style={{ color: S_COLOR[c.status] ?? '#64748b' }}>{S_LABEL[c.status] ?? c.status.toUpperCase()}</span>
                   </span>
-                  <span className="lp-td-mono lp-hide-sm">{timeAgo(c.created_at)}</span>
-                </a>
+                  <span className="lp-td-mono lp-hide-sm" title={new Date(c.created_at).toLocaleString()}>{timeAgo(c.created_at)}</span>
+                </Link>
               ))
           }
         </div>
@@ -318,7 +330,7 @@ export default function HomePage() {
           </h2>
           <p className="lp-cta-sub">Your investigation starts now.</p>
           <div className="lp-cta-actions">
-            <a href="/login" className="lp-cta-btn">Create Free Account</a>
+            <Link href="/signup" className="lp-cta-btn">Create Free Account</Link>
             <span className="lp-cta-note">No paywalls. No subscriptions. Verdicts are public.</span>
           </div>
         </div>
@@ -332,8 +344,8 @@ export default function HomePage() {
           </span>
           <span className="lp-footer-tag">Detect · Verify · Trust</span>
           <nav className="lp-footer-links">
-            <a href="/claims">Claims</a>
-            <a href="/login">Sign In</a>
+            <Link href="/claims">Claims</Link>
+            <Link href="/login">Sign In</Link>
           </nav>
         </div>
       </footer>
@@ -906,6 +918,7 @@ export default function HomePage() {
           .lp-cta-h { font-size: 2rem; }
           .lp-sec-num { font-size: 3rem; }
           .lp-hero-r { padding: 1.5rem 1.25rem 2.5rem; max-height: 320px; }
+          .lp-nav-link { display: none; }
         }
       `}</style>
     </main>

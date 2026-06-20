@@ -135,7 +135,7 @@ export default function NewClaimPage() {
   return (
     <div className="page-content" style={{ minHeight: '100vh' }}>
       <Navbar />
-      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '40px clamp(20px, 4vw, 64px)' }}>
+      <div style={{ maxWidth: '900px', margin: '0 auto', padding: 'clamp(20px, 6vw, 40px) clamp(20px, 4vw, 64px)' }}>
 
         <div style={{ marginBottom: '28px' }}>
           <Link href="/claims" className="btn-ghost" style={{ textDecoration: 'none', fontSize: '0.82rem', padding: '4px 0', display: 'inline-flex', gap: '6px' }}>
@@ -175,7 +175,7 @@ export default function NewClaimPage() {
               />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+            <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: '14px' }}>
               <div>
                 <label style={labelStyle}>Category</label>
                 <select

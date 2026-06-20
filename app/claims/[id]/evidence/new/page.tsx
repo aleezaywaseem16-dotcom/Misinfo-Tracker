@@ -19,6 +19,37 @@ export default function AddEvidencePage({ params }: { params: Promise<{ id: stri
   const [loading, setLoading] = useState(true);
 
   const [form, setForm] = useState({ title: "", content: "", evidence_url: "", image_url: "" });
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageError, setImageError] = useState("");
+
+  const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+  const ACCEPTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+
+  async function handleImageFile(file: File) {
+    setImageError("");
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+      setImageError("Please upload a PNG, JPEG, WEBP, or GIF image.");
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      setImageError("Image must be smaller than 5MB.");
+      return;
+    }
+    if (!userId) return;
+    setUploadingImage(true);
+    try {
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `${userId}/${id}-${Date.now()}.${ext}`;
+      const { error: uploadErr } = await supabase.storage.from("evidence-images").upload(path, file, { cacheControl: "3600", upsert: false });
+      if (uploadErr) throw uploadErr;
+      const { data: publicData } = supabase.storage.from("evidence-images").getPublicUrl(path);
+      setForm((prev) => ({ ...prev, image_url: publicData.publicUrl }));
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : "Failed to upload image.");
+    } finally {
+      setUploadingImage(false);
+    }
+  }
 
   const loadData = useCallback(async () => {
     const { data } = await supabase.from("claims").select("id, title, status").eq("id", id).single();
@@ -87,7 +118,7 @@ export default function AddEvidencePage({ params }: { params: Promise<{ id: stri
   return (
     <div style={{ minHeight: "100vh" }}>
       <Navbar />
-      <div style={{ maxWidth: 900, margin: "0 auto", padding: "36px clamp(20px, 4vw, 64px)" }}>
+      <div style={{ maxWidth: 900, margin: "0 auto", padding: "clamp(20px, 5vw, 36px) clamp(20px, 4vw, 64px)" }}>
 
         {/* Back + header */}
         <div style={{ marginBottom: 24 }}>
@@ -135,6 +166,53 @@ export default function AddEvidencePage({ params }: { params: Promise<{ id: stri
             </div>
           </div>
 
+          {/* Image upload */}
+          <div className="card" style={{ padding: "18px 20px" }}>
+            <div className="eyebrow" style={{ marginBottom: 14 }}>Screenshot / Image</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {form.image_url && (
+                <div style={{ position: "relative", maxWidth: 260 }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={form.image_url} alt="Evidence preview" style={{ width: "100%", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", display: "block" }} />
+                  <button
+                    type="button"
+                    onClick={() => setForm((prev) => ({ ...prev, image_url: "" }))}
+                    className="btn-secondary"
+                    style={{ marginTop: 8, fontSize: 12, padding: "5px 10px" }}
+                  >
+                    Remove image
+                  </button>
+                </div>
+              )}
+              <div>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>
+                  Upload an image <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(optional, max 5MB)</span>
+                </label>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  disabled={uploadingImage}
+                  onChange={(e) => { const file = e.target.files?.[0]; if (file) void handleImageFile(file); e.target.value = ""; }}
+                  className="input-field"
+                />
+                {uploadingImage && <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>Uploading...</p>}
+                {imageError && <p style={{ fontSize: 12, color: "var(--danger)", marginTop: 6 }}>{imageError}</p>}
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>
+                  Or paste an image URL <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(optional)</span>
+                </label>
+                <input
+                  type="url"
+                  value={form.image_url}
+                  onChange={(e) => setForm({ ...form, image_url: e.target.value })}
+                  placeholder="https://i.imgur.com/..."
+                  className="input-field"
+                />
+              </div>
+            </div>
+          </div>
+
           {/* Source */}
           <div className="card" style={{ padding: "18px 20px" }}>
             <div className="eyebrow" style={{ marginBottom: 14 }}>Source</div>
@@ -148,18 +226,6 @@ export default function AddEvidencePage({ params }: { params: Promise<{ id: stri
                   value={form.evidence_url}
                   onChange={(e) => setForm({ ...form, evidence_url: e.target.value })}
                   placeholder="https://example.com/post/..."
-                  className="input-field"
-                />
-              </div>
-              <div>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>
-                  Screenshot URL <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(optional)</span>
-                </label>
-                <input
-                  type="url"
-                  value={form.image_url}
-                  onChange={(e) => setForm({ ...form, image_url: e.target.value })}
-                  placeholder="https://i.imgur.com/..."
                   className="input-field"
                 />
               </div>
@@ -181,7 +247,7 @@ export default function AddEvidencePage({ params }: { params: Promise<{ id: stri
             <Link href={`/claims/${id}`} className="btn-secondary" style={{ flex: 1, textDecoration: "none", justifyContent: "center" }}>
               Cancel
             </Link>
-            <button type="submit" disabled={submitting} className="btn-primary" style={{ flex: 1, justifyContent: "center" }}>
+            <button type="submit" disabled={submitting || uploadingImage} className="btn-primary" style={{ flex: 1, justifyContent: "center" }}>
               {submitting ? "Submitting..." : "Submit Evidence"}
             </button>
           </div>

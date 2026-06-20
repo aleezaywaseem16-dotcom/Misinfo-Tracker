@@ -39,17 +39,28 @@ export async function POST(req: Request) {
 
     const { data: claim, error: claimErr } = await supabase
       .from("claims")
-      .insert({ title: safeTitle, description: safeDescription, visibility: safeVisibility, category_id: safeCategoryId, estimated_origin_at: safeOriginAt, created_by: user.id, status: "unverified" })
+      .insert({
+        title: safeTitle,
+        description: safeDescription,
+        visibility: safeVisibility,
+        category_id: safeCategoryId,
+        estimated_origin_at: safeOriginAt,
+        source_url: safeSource,
+        source_type: safeSourceType,
+        created_by: user.id,
+        status: "unverified",
+      })
       .select().single();
 
     if (claimErr || !claim) return NextResponse.json({ error: claimErr?.message ?? "Failed to create claim" }, { status: 500 });
 
-    await supabase.from("claim_sources").insert({ claim_id: claim.id, source_url: safeSource, source_type: safeSourceType, created_by: user.id });
-
     if (Array.isArray(selectedTags) && selectedTags.length > 0) {
       const validTagIds = (selectedTags as unknown[]).filter((t): t is string => typeof t === "string" && isValidUUID(t));
       if (validTagIds.length > 0) {
-        await supabase.from("claim_tags").insert(validTagIds.map((tag_id) => ({ claim_id: claim.id, tag_id, added_by: user.id })));
+        const { error: tagErr } = await supabase
+          .from("claim_tags")
+          .insert(validTagIds.map((tag_id) => ({ claim_id: claim.id, tag_id, added_by: user.id })));
+        if (tagErr) console.error("Failed to attach tags to claim:", tagErr.message);
       }
     }
 

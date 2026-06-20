@@ -14,6 +14,7 @@ export default function AdminPage() {
   const [stats, setStats] = useState<Stats>({ claims: 0, users: 0, evidence: 0, comments: 0 });
   const [recentClaims, setRecentClaims] = useState<RecentClaim[]>([]);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [statusError, setStatusError] = useState("");
 
   useEffect(() => {
     async function loadAll() {
@@ -39,17 +40,23 @@ export default function AdminPage() {
 
   async function handleStatusChange(claimId: string, newStatus: string) {
     setUpdating(claimId);
-    const res = await fetch("/api/claims/update-status", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ claim_id: claimId, status: newStatus }),
-    });
-    if (res.ok) {
+    setStatusError("");
+    try {
+      const res = await fetch("/api/claims/update-status", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ claim_id: claimId, status: newStatus }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok || payload?.error) throw new Error(payload?.error ?? "Failed to update status");
       setRecentClaims((prev) =>
         prev.map((c) => c.id === claimId ? { ...c, status: newStatus } : c)
       );
+    } catch (err) {
+      setStatusError(err instanceof Error ? err.message : "Failed to update status.");
+    } finally {
+      setUpdating(null);
     }
-    setUpdating(null);
   }
 
   const cards = [
@@ -62,7 +69,7 @@ export default function AdminPage() {
   return (
     <div className="page-content" style={{ minHeight: '100vh' }}>
       <Navbar />
-      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '40px clamp(20px, 4vw, 64px)' }}>
+      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: 'clamp(20px, 6vw, 40px) clamp(20px, 4vw, 64px)' }}>
         <div style={{ marginBottom: '32px' }}>
           <div className="hero-badge" style={{ marginBottom: '12px' }}>
             <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg>
@@ -97,6 +104,11 @@ export default function AdminPage() {
 
         <div className="card" style={{ padding: '24px' }}>
           <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '16px' }}>Recent claims</h2>
+          {statusError && (
+            <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderLeft: '3px solid var(--danger)', borderRadius: 'var(--radius-xs)', padding: '10px 14px', fontSize: '0.82rem', color: 'var(--danger)', marginBottom: '14px' }}>
+              {statusError}
+            </div>
+          )}
           {loading ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {[...Array(5)].map((_, i) => <div key={i} className="skeleton" style={{ height: '52px', borderRadius: '10px' }} />)}

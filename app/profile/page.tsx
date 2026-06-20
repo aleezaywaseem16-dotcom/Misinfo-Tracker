@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import { supabase } from "@/lib/supabase";
 
@@ -36,6 +37,15 @@ export default function ProfilePage() {
     if (updateErr) { setError(updateErr.message); } else { setSaved(true); setTimeout(() => setSaved(false), 2500); }
   }
 
+  function handleReset() {
+    if (!profile) return;
+    setForm({ display_name: profile.display_name ?? "", bio: profile.bio ?? "" });
+    setError("");
+    setSaved(false);
+  }
+
+  const isDirty = !!profile && (form.display_name !== (profile.display_name ?? "") || form.bio !== (profile.bio ?? ""));
+
   const labelStyle: React.CSSProperties = {
     display: 'block',
     fontSize: '0.78rem',
@@ -59,7 +69,10 @@ export default function ProfilePage() {
   return (
     <div className="page-content" style={{ minHeight: '100vh' }}>
       <Navbar />
-      <div style={{ maxWidth: '680px', margin: '0 auto', padding: '40px clamp(20px, 4vw, 64px)' }}>
+      <div style={{ maxWidth: '680px', margin: '0 auto', padding: 'clamp(20px, 6vw, 40px) clamp(20px, 4vw, 64px)' }}>
+        <Link href="/dashboard" className="btn-ghost" style={{ textDecoration: 'none', fontSize: '0.82rem', padding: '4px 0', display: 'inline-flex', gap: '6px', marginBottom: '16px' }}>
+          ← Back to dashboard
+        </Link>
         <h1 className="font-display" style={{ fontSize: '1.8rem', fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--text-primary)', marginBottom: '6px' }}>Profile</h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '28px' }}>Manage your display name and bio.</p>
         <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -83,9 +96,14 @@ export default function ProfilePage() {
               {error}
             </div>
           )}
-          <button type="submit" disabled={saving} className="btn-primary" style={{ width: '100%', justifyContent: 'center', opacity: saving ? 0.6 : 1 }}>
-            {saving ? "Saving..." : saved ? "✓ Saved!" : "Save profile"}
-          </button>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button type="button" onClick={handleReset} disabled={!isDirty} className="btn-secondary" style={{ flex: 1, justifyContent: 'center', opacity: isDirty ? 1 : 0.5 }}>
+              Reset
+            </button>
+            <button type="submit" disabled={saving || !isDirty} className="btn-primary" style={{ flex: 2, justifyContent: 'center', opacity: saving || !isDirty ? 0.6 : 1 }}>
+              {saving ? "Saving..." : saved ? "✓ Saved!" : "Save profile"}
+            </button>
+          </div>
         </form>
       </div>
     </div>

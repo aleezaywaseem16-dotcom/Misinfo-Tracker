@@ -55,8 +55,16 @@ export default function Navbar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Close mobile menu on route change
-  useEffect(() => { setMobileMenuOpen(false); }, [pathname]);
+  // Close mobile menu on route change (adjusting state during render instead of an effect)
+  const [prevPathname, setPrevPathname] = useState(pathname);
+  if (pathname !== prevPathname) {
+    setPrevPathname(pathname);
+    setMobileMenuOpen(false);
+  }
+
+  function isActive(href: string) {
+    return pathname === href || pathname.startsWith(`${href}/`);
+  }
 
   async function handleSignOut() {
     await supabase.auth.signOut();
@@ -84,6 +92,11 @@ export default function Navbar() {
     { href: "/chat", label: "Chat", icon: (
       <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.95 9.95 0 01-5-1.28L3 20l1.28-4.72A9.95 9.95 0 012 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+      </svg>
+    )},
+    { href: "/watchlist", label: "Watchlist", icon: (
+      <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.951.69h4.914c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.196-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.783-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
       </svg>
     )},
   ];
@@ -119,13 +132,13 @@ export default function Navbar() {
           {/* Desktop nav links */}
           <div className="nav-links">
             {navLinks.map((link) => (
-              <Link key={link.href} href={link.href} className={`nav-link${pathname === link.href ? ' active' : ''}`}>
+              <Link key={link.href} href={link.href} className={`nav-link${isActive(link.href) ? ' active' : ''}`}>
                 {link.icon}
                 {link.label}
               </Link>
             ))}
             {isAdmin && (
-              <Link href="/admin" className={`nav-link${pathname === '/admin' ? ' active' : ''}`}>
+              <Link href="/admin" className={`nav-link${isActive('/admin') ? ' active' : ''}`}>
                 <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -184,9 +197,9 @@ export default function Navbar() {
 
               {dropdownOpen && (
                 <div className="animate-scale-in avatar-menu">
-                  <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
-                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{profile.display_name}</div>
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px', fontFamily: 'var(--font-mono)' }}>@{profile.username}</div>
+                  <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'baseline', gap: '6px', overflow: 'hidden' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile.display_name}</span>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>@{profile.username}</span>
                   </div>
                   <div style={{ padding: '5px' }}>
                     {[
@@ -244,10 +257,10 @@ export default function Navbar() {
                   display: 'flex', alignItems: 'center', gap: '12px',
                   padding: '12px 20px',
                   fontSize: '14px', fontWeight: 600,
-                  color: pathname === link.href ? 'var(--accent)' : 'var(--text-secondary)',
-                  background: pathname === link.href ? 'var(--accent-dim)' : 'transparent',
+                  color: isActive(link.href) ? 'var(--accent)' : 'var(--text-secondary)',
+                  background: isActive(link.href) ? 'var(--accent-dim)' : 'transparent',
                   textDecoration: 'none',
-                  borderLeft: pathname === link.href ? '3px solid var(--accent)' : '3px solid transparent',
+                  borderLeft: isActive(link.href) ? '3px solid var(--accent)' : '3px solid transparent',
                   transition: 'all 0.1s',
                 }}
               >

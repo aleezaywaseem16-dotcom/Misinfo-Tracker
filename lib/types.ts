@@ -31,6 +31,8 @@ export interface Claim {
   status: ClaimStatus;
   estimated_origin_at: string | null;
   category_id: string | null;
+  source_url: string | null;
+  source_type: "link" | "document" | "image" | "text" | "other" | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -99,15 +101,6 @@ export interface ClaimVote {
   claim_id: string;
   user_id: string;
   vote_type: VoteType;
-  created_at: string;
-}
-
-export interface ClaimSource {
-  id: string;
-  claim_id: string;
-  source_url: string;
-  source_type: "link" | "document" | "image" | "text";
-  created_by: string | null;
   created_at: string;
 }
 

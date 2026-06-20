@@ -10,7 +10,7 @@ export async function GET() {
 
     const { data, error } = await supabase
       .from("user_watchlist")
-      .select(`claim_id, created_at, claims ( id, title, status, visibility, estimated_origin_at, created_at, profiles!claims_submitted_by_fkey ( display_name, username ), categories ( name ) )`)
+      .select(`claim_id, created_at, claims ( id, title, status, visibility, estimated_origin_at, created_at, profiles!claims_created_by_fkey ( display_name, username ), categories ( name ) )`)
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 

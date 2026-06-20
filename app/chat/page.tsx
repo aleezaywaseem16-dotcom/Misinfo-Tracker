@@ -131,7 +131,7 @@ export default function ChatPage() {
   return (
     <div className="page-content" style={{ minHeight: "100vh" }}>
       <Navbar />
-      <div style={{ maxWidth: "1400px", margin: "0 auto", padding: "36px clamp(20px, 4vw, 64px) 72px" }}>
+      <div style={{ maxWidth: "1400px", margin: "0 auto", padding: "clamp(20px, 5vw, 36px) clamp(20px, 4vw, 64px) 48px" }}>
 
         {/* Header */}
         <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: "24px", marginBottom: "32px", flexWrap: "wrap" }}>

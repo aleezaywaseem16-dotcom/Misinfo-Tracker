@@ -12,6 +12,7 @@ interface Claim {
   visibility: string;
   estimated_origin_at: string;
   created_at: string;
+  category_id: string | null;
   profiles: { display_name: string; username: string } | null;
   categories: { name: string } | null;
 }
@@ -50,12 +51,19 @@ export default function Dashboard() {
   const [watchlistClaims, setWatchlistClaims] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState("all");
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState("all");
+
+  async function loadCategories() {
+    const { data } = await supabase.from("categories").select("id, name").is("deleted_at", null).order("name");
+    setCategories(data ?? []);
+  }
 
   async function loadClaims() {
     const { data } = await supabase
       .from("claims")
-      .select(`id, title, status, visibility, estimated_origin_at, created_at,
-        profiles!claims_submitted_by_fkey ( display_name, username ), categories ( name )`)
+      .select(`id, title, status, visibility, estimated_origin_at, created_at, category_id,
+        profiles!claims_created_by_fkey ( display_name, username ), categories ( name )`)
       .eq("visibility", "public")
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
@@ -72,18 +80,22 @@ export default function Dashboard() {
   }
 
   async function loadWatchlist() {
-    if (typeof window === "undefined") return;
-    const stored = window.localStorage.getItem("misinfo-watchlist");
-    const list = stored ? JSON.parse(stored) : [];
-    const ids = Array.isArray(list) ? list : [];
-    setWatchlistClaims(ids);
+    try {
+      const res = await fetch("/api/watchlist");
+      const payload = await res.json();
+      if (!res.ok || payload?.error) return;
+      const rows = (payload.watchlist ?? []) as Array<{ claim_id: string }>;
+      setWatchlistClaims(rows.map((row) => row.claim_id));
+    } catch {
+      /* ignore — watchlist summary is non-critical */
+    }
   }
 
   useEffect(() => {
     async function init() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { router.push("/login"); return; }
-      await Promise.all([loadClaims(), loadStats(), loadWatchlist()]);
+      await Promise.all([loadClaims(), loadStats(), loadWatchlist(), loadCategories()]);
       setLoading(false);
     }
     init();
@@ -92,7 +104,9 @@ export default function Dashboard() {
   const watchlistAlertCount = watchlistClaims.filter((id) => claims.some((claim) => claim.id === id && ["investigating", "confirmed", "disputed"].includes(claim.status))).length;
 
   const filters = ["all", "unverified", "investigating", "confirmed", "debunked", "disputed"];
-  const filteredClaims = activeFilter === "all" ? claims : claims.filter((c) => c.status === activeFilter);
+  const filteredClaims = claims
+    .filter((c) => activeFilter === "all" || c.status === activeFilter)
+    .filter((c) => categoryFilter === "all" || c.category_id === categoryFilter);
 
   const statCards = [
     { label: "Total Claims", value: stats.totalClaims, color: 'var(--accent)', icon: (
@@ -113,7 +127,7 @@ export default function Dashboard() {
     <div className="page-content" style={{ minHeight: '100vh' }}>
       <Navbar />
 
-      <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '40px clamp(20px, 4vw, 64px)' }}>
+      <div style={{ maxWidth: '1600px', margin: '0 auto', padding: 'clamp(20px, 6vw, 40px) clamp(20px, 4vw, 64px)' }}>
 
         {/* Hero header */}
         <div className="animate-fade-up" style={{ marginBottom: '40px' }}>
@@ -123,9 +137,9 @@ export default function Dashboard() {
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '24px', flexWrap: 'wrap' }}>
             <div>
-              <h1 className="font-display" style={{ fontSize: '2.6rem', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.04em', lineHeight: 1.05, marginBottom: '14px' }}>
+              <h1 className="font-display" style={{ fontSize: 'clamp(1.8rem, 5vw, 2.6rem)', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.04em', lineHeight: 1.05, marginBottom: '14px' }}>
                 Intelligence for fact-driven teams
-                <span className="gradient-text" style={{ display: 'block', fontSize: '2.6rem', lineHeight: 1.05 }}>Secure the narrative with precision.</span>
+                <span className="gradient-text" style={{ display: 'block', fontSize: 'clamp(1.8rem, 5vw, 2.6rem)', lineHeight: 1.05 }}>Secure the narrative with precision.</span>
               </h1>
               <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', maxWidth: '560px', lineHeight: 1.75, marginTop: '4px' }}>
                 See high-risk claims, author signals, and investigation status from one polished control panel.
@@ -170,7 +184,7 @@ export default function Dashboard() {
         </div>
 
         {/* Filter chips */}
-        <div className="animate-fade-up stagger-5" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px', overflowX: 'auto', paddingBottom: '4px' }}>
+        <div className="animate-fade-up stagger-5" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', overflowX: 'auto', paddingBottom: '4px' }}>
           <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginRight: '4px', whiteSpace: 'nowrap' }}>Filter</span>
           {filters.map((f) => (
             <button key={f} onClick={() => setActiveFilter(f)} className={`filter-chip ${activeFilter === f ? 'active' : ''}`}>
@@ -178,6 +192,21 @@ export default function Dashboard() {
             </button>
           ))}
         </div>
+
+        {/* Category chips */}
+        {categories.length > 0 && (
+          <div className="animate-fade-up stagger-5" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px', overflowX: 'auto', paddingBottom: '4px' }}>
+            <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginRight: '4px', whiteSpace: 'nowrap' }}>Category</span>
+            <button onClick={() => setCategoryFilter('all')} className={`filter-chip ${categoryFilter === 'all' ? 'active' : ''}`}>
+              all
+            </button>
+            {categories.map((c) => (
+              <button key={c.id} onClick={() => setCategoryFilter(c.id)} className={`filter-chip ${categoryFilter === c.id ? 'active' : ''}`}>
+                {c.name}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Claims list */}
         {loading ? (
@@ -251,11 +280,11 @@ export default function Dashboard() {
         {filteredClaims.length > 0 && (
           <>
             <div className="dashboard-summary-card" style={{ marginTop: '32px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
-              <div className="card" style={{ padding: '24px' }}>
+              <Link href="/watchlist" className="card card-clickable" style={{ padding: '24px', textDecoration: 'none', color: 'var(--text-primary)', display: 'block' }}>
                 <div className="eyebrow" style={{ marginBottom: 10 }}>Watchlist</div>
                 <div className="data-num">{watchlistClaims.length}</div>
                 <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 8 }}>Claims tracked for alerts and status updates.</p>
-              </div>
+              </Link>
               <div className="card" style={{ padding: '24px' }}>
                 <div className="eyebrow" style={{ marginBottom: 10 }}>Active Alerts</div>
                 <div className="data-num" style={{ color: watchlistAlertCount > 0 ? 'var(--accent)' : 'var(--text-primary)' }}>{watchlistAlertCount}</div>

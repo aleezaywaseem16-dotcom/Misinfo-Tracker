@@ -376,10 +376,22 @@ create policy "profiles own update"  on profiles for update using (auth.uid() = 
 create policy "profiles admin all"   on profiles for all    using (current_user_role() = 'admin');
 
 -- ── categories ───────────────────────────────────────────────
+-- split out of the original "for all" policy and consolidated with this
+-- database's pre-existing categories_select/insert_mod/update_mod/delete_mod
+-- policies, with an explicit WITH CHECK on UPDATE (see comments table fix
+-- above for why relying on implicit USING-as-WITH-CHECK across overlapping
+-- permissive policies is unsafe here).
 drop policy if exists "categories public read" on categories;
 drop policy if exists "categories admin write" on categories;
-create policy "categories public read" on categories for select using (true);
-create policy "categories admin write" on categories for all    using (current_user_role() = 'admin');
+drop policy if exists "categories_select"      on categories;
+drop policy if exists "categories_insert_mod"  on categories;
+drop policy if exists "categories_update_mod"  on categories;
+drop policy if exists "categories_delete_mod"  on categories;
+create policy "categories public read"   on categories for select using (true);
+create policy "categories admin insert"  on categories for insert with check (current_user_role() = 'admin');
+create policy "categories admin update"  on categories for update
+  using (current_user_role() = 'admin') with check (current_user_role() = 'admin');
+create policy "categories admin delete"  on categories for delete using (current_user_role() = 'admin');
 
 -- ── tags ─────────────────────────────────────────────────────
 drop policy if exists "tags public read"  on tags;
@@ -390,11 +402,21 @@ create policy "tags auth insert"  on tags for insert with check (auth.uid() is n
 create policy "tags admin delete" on tags for delete using (current_user_role() in ('admin','moderator'));
 
 -- ── claims ───────────────────────────────────────────────────
-drop policy if exists "claims public read" on claims;
-drop policy if exists "claims own read"    on claims;
-drop policy if exists "claims auth insert" on claims;
-drop policy if exists "claims own update"  on claims;
-drop policy if exists "claims mod delete"  on claims;
+-- consolidated with this database's pre-existing claims_select_public/
+-- select_own_or_mod/insert_auth/update_own_or_mod/delete_mod policies -
+-- two overlapping UPDATE policies both lacking an explicit WITH CHECK is
+-- exactly what broke comment soft-deletes, so giving this one an explicit
+-- WITH CHECK instead of relying on implicit defaulting.
+drop policy if exists "claims public read"        on claims;
+drop policy if exists "claims own read"           on claims;
+drop policy if exists "claims auth insert"        on claims;
+drop policy if exists "claims own update"         on claims;
+drop policy if exists "claims mod delete"         on claims;
+drop policy if exists "claims_select_public"      on claims;
+drop policy if exists "claims_select_own_or_mod"  on claims;
+drop policy if exists "claims_insert_auth"        on claims;
+drop policy if exists "claims_update_own_or_mod"  on claims;
+drop policy if exists "claims_delete_mod"         on claims;
 create policy "claims public read" on claims for select
   using (visibility = 'public' and deleted_at is null);
 create policy "claims own read" on claims for select
@@ -402,7 +424,8 @@ create policy "claims own read" on claims for select
 create policy "claims auth insert" on claims for insert
   with check (auth.uid() is not null and created_by = auth.uid());
 create policy "claims own update" on claims for update
-  using (auth.uid() = created_by or current_user_role() in ('admin','moderator'));
+  using (auth.uid() = created_by or current_user_role() in ('admin','moderator'))
+  with check (auth.uid() = created_by or current_user_role() in ('admin','moderator'));
 create policy "claims mod delete" on claims for delete
   using (current_user_role() in ('admin','moderator'));
 
@@ -415,15 +438,23 @@ create policy "claim tags auth insert" on claim_tags for insert with check (auth
 create policy "claim tags auth delete" on claim_tags for delete using (auth.uid() is not null);
 
 -- ── evidence ─────────────────────────────────────────────────
-drop policy if exists "evidence public read" on evidence;
-drop policy if exists "evidence auth insert" on evidence;
-drop policy if exists "evidence own update"  on evidence;
-drop policy if exists "evidence mod delete"  on evidence;
+-- consolidated with this database's pre-existing evidence_select/
+-- insert_auth/update_own_or_mod/delete_mod policies - same overlapping-
+-- UPDATE-policy fix as claims/comments above.
+drop policy if exists "evidence public read"         on evidence;
+drop policy if exists "evidence auth insert"         on evidence;
+drop policy if exists "evidence own update"          on evidence;
+drop policy if exists "evidence mod delete"          on evidence;
+drop policy if exists "evidence_select"              on evidence;
+drop policy if exists "evidence_insert_auth"         on evidence;
+drop policy if exists "evidence_update_own_or_mod"   on evidence;
+drop policy if exists "evidence_delete_mod"          on evidence;
 create policy "evidence public read" on evidence for select using (deleted_at is null);
 create policy "evidence auth insert" on evidence for insert
   with check (auth.uid() is not null and created_by = auth.uid());
 create policy "evidence own update"  on evidence for update
-  using (auth.uid() = created_by or current_user_role() in ('admin','moderator'));
+  using (auth.uid() = created_by or current_user_role() in ('admin','moderator'))
+  with check (auth.uid() = created_by or current_user_role() in ('admin','moderator'));
 create policy "evidence mod delete"  on evidence for delete
   using (current_user_role() in ('admin','moderator'));
 

@@ -14,6 +14,8 @@ interface Claim {
   estimated_origin_at: string;
   created_at: string;
   created_by: string;
+  source_url: string | null;
+  source_type: string | null;
   profiles: { display_name: string; username: string; avatar_url: string | null } | null;
   categories: { name: string } | null;
 }
@@ -111,7 +113,7 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
 
   const loadClaim = useCallback(async () => {
     const { data } = await supabase.from("claims")
-      .select(`id, title, description, status, visibility, estimated_origin_at, created_at, created_by, profiles!claims_created_by_fkey ( display_name, username, avatar_url ), categories ( name )`)
+      .select(`id, title, description, status, visibility, estimated_origin_at, created_at, created_by, source_url, source_type, profiles!claims_created_by_fkey ( display_name, username, avatar_url ), categories ( name )`)
       .eq("id", id).single();
     if (data) setClaim(data as unknown as Claim);
   }, [id]);
@@ -373,6 +375,21 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
               <p style={{ color: 'var(--text-secondary)', lineHeight: 1.8, fontSize: '0.95rem', maxWidth: '70ch' }}>
                 {claim.description ?? "No description was provided for this claim yet."}
               </p>
+
+              {/* Source */}
+              {claim.source_url && (
+                <div style={{ marginTop: '18px' }}>
+                  <div className="eyebrow" style={{ marginBottom: '8px', fontSize: '0.62rem' }}>Source ({claim.source_type ?? 'link'})</div>
+                  {claim.source_type === 'image' ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={claim.source_url} alt="Claim source" style={{ maxWidth: '100%', maxHeight: 360, borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', display: 'block' }} />
+                  ) : (
+                    <a href={claim.source_url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      View source →
+                    </a>
+                  )}
+                </div>
+              )}
 
               {/* Origin date row */}
               <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>

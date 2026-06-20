@@ -15,16 +15,11 @@ export async function DELETE(req: Request) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    // Soft delete — RLS only permits this for the comment's own author (or an
-    // admin/moderator), so a non-owner's request updates zero rows rather than
-    // erroring, which we treat as "not found / not yours".
-    const { data, error } = await supabase
-      .from("comments")
-      .update({ deleted_at: new Date().toISOString() })
-      .eq("id", comment_id)
-      .is("deleted_at", null)
-      .select()
-      .maybeSingle();
+    // Soft delete via a security-definer RPC (see soft_delete_comment in
+    // scripts/supabase-schema.sql) rather than a plain RLS-gated UPDATE —
+    // the declarative UPDATE policy did not reliably allow this even with
+    // an explicit, verified-correct WITH CHECK clause.
+    const { data, error } = await supabase.rpc("soft_delete_comment", { comment_id });
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     if (!data) return NextResponse.json({ error: "Comment not found or you don't have permission to delete it" }, { status: 404 });

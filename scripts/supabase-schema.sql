@@ -484,6 +484,39 @@ create policy "comments own update"  on comments for update
 create policy "comments mod delete"  on comments for delete
   using (current_user_role() in ('admin','moderator'));
 
+-- The declarative UPDATE policy above does not reliably allow the comment
+-- soft-delete in practice (reproduced directly against a single, explicit
+-- policy whose USING/WITH CHECK conditions were independently verified true
+-- for the calling user — likely some interaction specific to this database's
+-- history of overlapping policy sets that re-creating policies cleanly did
+-- not resolve). Bypassing RLS for this one controlled operation via a
+-- SECURITY DEFINER function with the same authorization check written
+-- explicitly in PL/pgSQL instead.
+create or replace function soft_delete_comment(comment_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path to 'public'
+as $$
+declare
+  comment_owner uuid;
+begin
+  select created_by into comment_owner from comments where id = comment_id and deleted_at is null;
+  if comment_owner is null then
+    return false;
+  end if;
+
+  if auth.uid() is null or (auth.uid() != comment_owner and current_user_role() not in ('admin','moderator')) then
+    raise exception 'not authorized to delete this comment';
+  end if;
+
+  update comments set deleted_at = now() where id = comment_id;
+  return true;
+end;
+$$;
+
+grant execute on function soft_delete_comment(uuid) to authenticated;
+
 -- ── votes ────────────────────────────────────────────────────
 drop policy if exists "votes public read" on claim_votes;
 drop policy if exists "votes auth upsert" on claim_votes;

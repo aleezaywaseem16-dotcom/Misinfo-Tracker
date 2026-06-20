@@ -33,6 +33,7 @@ interface Comment {
   content: string;
   created_at: string;
   parent_comment_id: string | null;
+  created_by: string;
   profiles: { display_name: string; username: string; avatar_url: string | null } | null;
 }
 
@@ -100,6 +101,7 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
   const [chatSending, setChatSending] = useState(false);
   const [chatError, setChatError] = useState("");
   const [commentError, setCommentError] = useState("");
+  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
   const [watchError, setWatchError] = useState("");
   const [voteError, setVoteError] = useState("");
   const chatEndRef = useRef<HTMLDivElement | null>(null);
@@ -136,7 +138,7 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
 
   const loadComments = useCallback(async () => {
     const { data, error } = await supabase.from("comments")
-      .select(`id, content, created_at, parent_comment_id, profiles!comments_created_by_fkey ( display_name, username, avatar_url )`)
+      .select(`id, content, created_at, parent_comment_id, created_by, profiles!comments_created_by_fkey ( display_name, username, avatar_url )`)
       .eq("claim_id", id).is("deleted_at", null).order("created_at", { ascending: true });
     if (error) console.error("Failed to load comments:", error.message);
     setComments((data as unknown as Comment[]) ?? []);
@@ -202,6 +204,25 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
       setCommentError(err instanceof Error ? err.message : 'Failed to post comment');
     } finally {
       setSubmittingComment(false);
+    }
+  }
+
+  async function handleDeleteComment(commentId: string) {
+    if (!window.confirm("Delete this comment? This can't be undone.")) return;
+    setCommentError("");
+    setDeletingCommentId(commentId);
+    try {
+      const res = await fetch('/api/comments/delete', {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ comment_id: commentId }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok || payload?.error) throw new Error(payload?.error ?? 'Failed to delete comment');
+      setComments((prev) => prev.filter((c) => c.id !== commentId));
+    } catch (err) {
+      setCommentError(err instanceof Error ? err.message : 'Failed to delete comment');
+    } finally {
+      setDeletingCommentId(null);
     }
   }
 
@@ -599,10 +620,21 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
                         <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(190,242,100,0.08)', border: '1px solid rgba(190,242,100,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontWeight: 700, fontSize: '0.9rem', flexShrink: 0 }}>
                           {comment.profiles?.display_name?.charAt(0).toUpperCase() ?? 'U'}
                         </div>
-                        <div>
+                        <div style={{ flex: 1 }}>
                           <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>{comment.profiles?.display_name ?? 'Anonymous'}</div>
                           <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }} title={new Date(comment.created_at).toLocaleString()}>{timeAgo(comment.created_at)}</div>
                         </div>
+                        {comment.created_by === userId && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteComment(comment.id)}
+                            disabled={deletingCommentId === comment.id}
+                            className="btn-ghost"
+                            style={{ fontSize: '0.72rem', padding: '4px 10px', flexShrink: 0, color: 'var(--danger)', opacity: deletingCommentId === comment.id ? 0.5 : 1 }}
+                          >
+                            {deletingCommentId === comment.id ? 'Deleting...' : 'Delete'}
+                          </button>
+                        )}
                       </div>
                       <p style={{ color: 'var(--text-secondary)', lineHeight: 1.75 }}>{comment.content}</p>
                     </div>

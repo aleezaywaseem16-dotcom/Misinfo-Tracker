@@ -35,9 +35,10 @@ alter table profiles add column if not exists updated_at timestamptz not null de
 create or replace function handle_new_user()
 returns trigger language plpgsql security definer as $$
 declare
-  base_username text;
-  candidate     text;
-  suffix        int := 0;
+  base_username   text;
+  candidate        text;
+  suffix           int := 0;
+  default_role_id  uuid;
 begin
   base_username := coalesce(new.raw_user_meta_data->>'preferred_username', split_part(new.email,'@',1));
   candidate := base_username;
@@ -50,12 +51,18 @@ begin
     candidate := base_username || suffix::text;
   end loop;
 
+  -- role_id is NOT NULL on profiles in some deployments — guarantee a 'user'
+  -- role row exists instead of relying on it having been seeded elsewhere,
+  -- so a missing/empty roles table can never roll back the signup.
+  insert into roles (name) values ('user') on conflict (name) do nothing;
+  select id into default_role_id from roles where name = 'user';
+
   insert into profiles (id, username, display_name, role_id)
   values (
     new.id,
     candidate,
     coalesce(new.raw_user_meta_data->>'full_name', base_username),
-    (select id from roles where name = 'user')
+    default_role_id
   )
   on conflict (id) do nothing;
   return new;

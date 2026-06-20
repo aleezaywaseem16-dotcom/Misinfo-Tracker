@@ -245,7 +245,7 @@ export default function NewClaimPage() {
               <DatePicker
                 value={form.estimated_origin_at}
                 onChange={(value) => setForm({ ...form, estimated_origin_at: value })}
-                placeholder="Select a date"
+                placeholder="YYYY-MM-DD"
               />
               <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '5px' }}>Leave blank to use today as the origin date. Future dates aren&apos;t allowed.</p>
             </div>

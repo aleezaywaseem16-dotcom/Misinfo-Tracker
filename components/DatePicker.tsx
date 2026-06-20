@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 interface DatePickerProps {
   value: string; // "YYYY-MM-DD" or ""
@@ -7,6 +7,8 @@ interface DatePickerProps {
   placeholder?: string;
   /** Defaults to today — dates after this are disabled. */
   maxDate?: Date;
+  /** Earliest selectable year in the quick-jump dropdown. Defaults to 1900. */
+  minYear?: number;
 }
 
 const MONTH_NAMES = [
@@ -14,6 +16,7 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December",
 ];
 const WEEKDAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+const DATE_FORMAT_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function toDateString(d: Date) {
   const y = d.getFullYear();
@@ -23,11 +26,12 @@ function toDateString(d: Date) {
 }
 
 function parseDateString(s: string): Date | null {
-  if (!s) return null;
-  const parts = s.split("-").map(Number);
-  const [y, m, d] = parts;
-  if (!y || !m || !d) return null;
-  return new Date(y, m - 1, d);
+  if (!s || !DATE_FORMAT_RE.test(s)) return null;
+  const [y, m, d] = s.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  // reject things like 2024-02-31 that overflow into the next month
+  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null;
+  return date;
 }
 
 function isSameDay(a: Date, b: Date) {
@@ -40,17 +44,27 @@ function startOfToday() {
   return d;
 }
 
-export default function DatePicker({ value, onChange, placeholder, maxDate }: DatePickerProps) {
+export default function DatePicker({ value, onChange, placeholder, maxDate, minYear = 1900 }: DatePickerProps) {
+  const popupId = useId();
   const [open, setOpen] = useState(false);
+  const [inputError, setInputError] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
   const today = startOfToday();
   const max = maxDate ?? today;
   const selected = parseDateString(value);
   const [viewDate, setViewDate] = useState(() => selected ?? today);
+  const [rawText, setRawText] = useState(value);
 
-  // Reset the visible month to the selected date whenever the popup opens —
-  // adjusted during render instead of an effect (see Navbar's prevPathname
-  // pattern for the same approach).
+  // Keep the typed text and visible month in sync with the committed value
+  // whenever it changes externally (calendar pick, parent reset, popup
+  // opening) — adjusted during render instead of an effect, same pattern
+  // used by Navbar's prevPathname.
+  const [prevValue, setPrevValue] = useState(value);
+  if (value !== prevValue) {
+    setPrevValue(value);
+    setRawText(value);
+    setInputError("");
+  }
   const [prevOpen, setPrevOpen] = useState(open);
   if (open !== prevOpen) {
     setPrevOpen(open);
@@ -65,12 +79,30 @@ export default function DatePicker({ value, onChange, placeholder, maxDate }: Da
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  function handleTriggerKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "Escape") setOpen(false);
-    if ((e.key === "Enter" || e.key === " ") && !open) {
-      e.preventDefault();
-      setOpen(true);
+  function commitTyped(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      setInputError("");
+      onChange("");
+      return;
     }
+    const parsed = parseDateString(trimmed);
+    if (!parsed) {
+      setInputError("Use the YYYY-MM-DD format.");
+      return;
+    }
+    if (parsed.getTime() > max.getTime()) {
+      setInputError("That date is in the future.");
+      return;
+    }
+    setInputError("");
+    onChange(trimmed);
+    setViewDate(parsed);
+  }
+
+  function handleInputKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Escape") { setOpen(false); setRawText(value); setInputError(""); }
+    if (e.key === "Enter") { e.preventDefault(); commitTyped(rawText); }
   }
 
   const year = viewDate.getFullYear();
@@ -79,33 +111,53 @@ export default function DatePicker({ value, onChange, placeholder, maxDate }: Da
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const nextMonthStart = new Date(year, month + 1, 1);
   const canGoNext = nextMonthStart <= max;
+  const yearOptions: number[] = [];
+  for (let y = max.getFullYear(); y >= minYear; y--) yearOptions.push(y);
 
   const cells: (Date | null)[] = [];
   for (let i = 0; i < startWeekday; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
 
   return (
-    <div ref={containerRef} style={{ position: "relative" }} onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        onKeyDown={handleTriggerKeyDown}
-        className="input-field"
-        style={{ width: "100%", textAlign: "left", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-      >
-        <span style={{ color: selected ? "var(--text-primary)" : "var(--text-disabled)" }}>
-          {selected ? selected.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : (placeholder ?? "Select a date")}
-        </span>
-        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ flexShrink: 0, color: "var(--text-muted)" }}>
-          <rect x="3" y="4" width="18" height="18" rx="2" strokeWidth={2} />
-          <path strokeLinecap="round" strokeWidth={2} d="M3 10h18M8 2v4M16 2v4" />
-        </svg>
-      </button>
+    <div ref={containerRef} style={{ position: "relative" }}>
+      <div style={{ position: "relative" }}>
+        <input
+          type="text"
+          role="combobox"
+          value={rawText}
+          onChange={(e) => setRawText(e.target.value)}
+          onFocus={() => setOpen(true)}
+          onBlur={() => commitTyped(rawText)}
+          onKeyDown={handleInputKeyDown}
+          placeholder={placeholder ?? "YYYY-MM-DD"}
+          className="input-field"
+          style={{ width: "100%", paddingRight: 34 }}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          aria-controls={popupId}
+        />
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          tabIndex={-1}
+          aria-label="Open calendar"
+          style={{
+            position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+            background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer",
+            display: "flex", alignItems: "center", padding: 4,
+          }}
+        >
+          <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <rect x="3" y="4" width="18" height="18" rx="2" strokeWidth={2} />
+            <path strokeLinecap="round" strokeWidth={2} d="M3 10h18M8 2v4M16 2v4" />
+          </svg>
+        </button>
+      </div>
+      {inputError && <p style={{ fontSize: "0.7rem", color: "var(--danger)", marginTop: 4 }}>{inputError}</p>}
 
       {open && (
         <div
+          id={popupId}
           role="dialog"
           aria-label="Choose a date"
           style={{
@@ -115,11 +167,20 @@ export default function DatePicker({ value, onChange, placeholder, maxDate }: Da
             width: "280px", maxWidth: "calc(100vw - 32px)",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px", gap: 6 }}>
             <button type="button" onClick={() => setViewDate(new Date(year, month - 1, 1))} className="btn-ghost" style={{ padding: "4px 8px" }} aria-label="Previous month">
               ‹
             </button>
-            <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--text-primary)" }}>{MONTH_NAMES[month]} {year}</span>
+            <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--text-primary)" }}>{MONTH_NAMES[month]}</span>
+            <select
+              value={year}
+              onChange={(e) => setViewDate(new Date(Number(e.target.value), month, 1))}
+              className="input-field"
+              style={{ fontSize: "0.78rem", padding: "3px 6px", width: "auto" }}
+              aria-label="Jump to year"
+            >
+              {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
+            </select>
             <button
               type="button"
               onClick={() => setViewDate(new Date(year, month + 1, 1))}

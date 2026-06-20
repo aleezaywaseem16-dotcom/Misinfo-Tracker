@@ -110,7 +110,7 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
   const [watchError, setWatchError] = useState("");
   const [voteError, setVoteError] = useState("");
   const chatEndRef = useRef<HTMLDivElement | null>(null);
-  const [activeTab, setActiveTab] = useState<"overview" | "evidence" | "comments">("overview");
+  const [activeTab, setActiveTab] = useState<"evidence" | "comments">("evidence");
   const [watching, setWatching] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -599,21 +599,12 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
             {/* Tabs section */}
             <div>
               <div className="tab-bar">
-                {(["overview", "evidence", "comments"] as const).map((tab) => (
+                {(["evidence", "comments"] as const).map((tab) => (
                   <button key={tab} onClick={() => setActiveTab(tab)} className={`tab-item ${activeTab === tab ? 'active' : ''}`}>
-                    {tab === 'overview' ? 'Overview' : tab === 'evidence' ? `Evidence (${evidence.length})` : `Comments (${comments.length})`}
+                    {tab === 'evidence' ? `Evidence (${evidence.length})` : `Comments (${comments.length})`}
                   </button>
                 ))}
               </div>
-
-              {activeTab === "overview" && (
-                <div className="card" style={{ marginTop: '14px', padding: '24px 28px' }}>
-                  <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '10px' }}>Claim overview</h2>
-                  <p style={{ color: 'var(--text-secondary)', lineHeight: 1.8 }}>
-                    This page collects evidence, community signals and status updates into a single intelligence summary. Watch this claim to keep it on your personalized dashboard and quickly review fresh changes.
-                  </p>
-                </div>
-              )}
 
               {activeTab === "evidence" && (
                 <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '12px' }}>

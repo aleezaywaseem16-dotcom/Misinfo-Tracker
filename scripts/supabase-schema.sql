@@ -432,11 +432,24 @@ drop policy if exists "comments public read" on comments;
 drop policy if exists "comments auth insert" on comments;
 drop policy if exists "comments own update"  on comments;
 drop policy if exists "comments mod delete"  on comments;
+-- this project's database also independently has its own pre-existing policy
+-- set with different names (comments_select / comments_insert_auth /
+-- comments_update_own_or_mod / comments_delete_mod). Two overlapping
+-- permissive UPDATE policies that both omit an explicit WITH CHECK caused
+-- soft-deletes to fail with "violates row-level security policy" even
+-- though every individual condition evaluated true - drop both UPDATE
+-- policies and replace with one with an explicit WITH CHECK instead of
+-- relying on implicit USING-as-WITH-CHECK defaulting across two policies.
+drop policy if exists "comments_select"             on comments;
+drop policy if exists "comments_insert_auth"         on comments;
+drop policy if exists "comments_update_own_or_mod"   on comments;
+drop policy if exists "comments_delete_mod"          on comments;
 create policy "comments public read" on comments for select using (deleted_at is null);
 create policy "comments auth insert" on comments for insert
   with check (auth.uid() is not null and created_by = auth.uid());
 create policy "comments own update"  on comments for update
-  using (auth.uid() = created_by or current_user_role() in ('admin','moderator'));
+  using (auth.uid() = created_by or current_user_role() in ('admin','moderator'))
+  with check (auth.uid() = created_by or current_user_role() in ('admin','moderator'));
 create policy "comments mod delete"  on comments for delete
   using (current_user_role() in ('admin','moderator'));
 

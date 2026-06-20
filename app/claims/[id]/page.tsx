@@ -104,6 +104,9 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
   const [chatError, setChatError] = useState("");
   const [commentError, setCommentError] = useState("");
   const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
+  const [replyingToId, setReplyingToId] = useState<string | null>(null);
+  const [replyContent, setReplyContent] = useState("");
+  const [submittingReply, setSubmittingReply] = useState(false);
   const [watchError, setWatchError] = useState("");
   const [voteError, setVoteError] = useState("");
   const chatEndRef = useRef<HTMLDivElement | null>(null);
@@ -209,6 +212,38 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
     }
   }
 
+  function startReply(commentId: string) {
+    setReplyingToId(commentId);
+    setReplyContent("");
+    setCommentError("");
+  }
+
+  function cancelReply() {
+    setReplyingToId(null);
+    setReplyContent("");
+  }
+
+  async function submitReply(e: FormEvent<HTMLFormElement>, parentId: string) {
+    e.preventDefault();
+    if (!userId || !replyContent.trim()) return;
+    setSubmittingReply(true);
+    try {
+      const res = await fetch('/api/comments/create', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ claim_id: id, content: replyContent.trim(), parent_comment_id: parentId }),
+      });
+      const payload = await res.json();
+      if (!res.ok || payload?.error) throw new Error(payload?.error ?? 'Failed to post reply');
+      setReplyingToId(null);
+      setReplyContent("");
+      await loadComments();
+    } catch (err) {
+      setCommentError(err instanceof Error ? err.message : 'Failed to post reply');
+    } finally {
+      setSubmittingReply(false);
+    }
+  }
+
   async function handleDeleteComment(commentId: string) {
     if (!window.confirm("Delete this comment? This can't be undone.")) return;
     setCommentError("");
@@ -259,6 +294,19 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
 
   const confidence = useMemo(() => confidenceScore(claim?.status ?? "unverified", evidence.length, voteCounts.upvotes, voteCounts.downvotes), [claim?.status, evidence.length, voteCounts]);
   const evidenceSummary = evidence.slice(0, 3);
+
+  const topLevelComments = useMemo(() => comments.filter((c) => !c.parent_comment_id), [comments]);
+  const repliesByParent = useMemo(() => {
+    const map = new Map<string, Comment[]>();
+    for (const c of comments) {
+      if (c.parent_comment_id) {
+        const list = map.get(c.parent_comment_id) ?? [];
+        list.push(c);
+        map.set(c.parent_comment_id, list);
+      }
+    }
+    return map;
+  }, [comments]);
 
   function buildChatContext(question: string) {
     const summary = claim
@@ -635,9 +683,9 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
                     </div>
                     {commentError && <p style={{ color: 'var(--danger)', marginTop: '10px', fontSize: '0.85rem' }}>{commentError}</p>}
                   </form>
-                  {comments.length === 0 ? (
+                  {topLevelComments.length === 0 ? (
                     <div className="empty-state">No comments yet. Start the conversation.</div>
-                  ) : comments.map((comment) => (
+                  ) : topLevelComments.map((comment) => (
                     <div key={comment.id} className="card" style={{ padding: '18px 22px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
                         <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(190,242,100,0.08)', border: '1px solid rgba(190,242,100,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontWeight: 700, fontSize: '0.9rem', flexShrink: 0 }}>
@@ -664,6 +712,72 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
                         )}
                       </div>
                       <p style={{ color: 'var(--text-secondary)', lineHeight: 1.75 }}>{comment.content}</p>
+
+                      <div style={{ marginTop: '10px' }}>
+                        <button
+                          type="button"
+                          onClick={() => (replyingToId === comment.id ? cancelReply() : startReply(comment.id))}
+                          className="btn-ghost"
+                          style={{ fontSize: '0.72rem', padding: '4px 10px' }}
+                        >
+                          {replyingToId === comment.id ? 'Cancel' : 'Reply'}
+                        </button>
+                      </div>
+
+                      {replyingToId === comment.id && (
+                        <form onSubmit={(e) => submitReply(e, comment.id)} style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
+                          <textarea
+                            value={replyContent}
+                            onChange={(e) => setReplyContent(e.target.value)}
+                            placeholder={`Reply to ${comment.profiles?.display_name ?? 'this comment'}...`}
+                            rows={3}
+                            className="input-field"
+                            style={{ width: '100%', resize: 'none' }}
+                            maxLength={1000}
+                            autoFocus
+                          />
+                          <div style={{ marginTop: '6px', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                            <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', flex: 1 }}>{replyContent.length}/1000</p>
+                            <button type="submit" disabled={submittingReply || !replyContent.trim()} className="btn-primary" style={{ fontSize: '0.78rem', padding: '6px 14px', opacity: submittingReply || !replyContent.trim() ? 0.6 : 1 }}>
+                              {submittingReply ? 'Posting...' : 'Post reply'}
+                            </button>
+                          </div>
+                        </form>
+                      )}
+
+                      {(repliesByParent.get(comment.id) ?? []).length > 0 && (
+                        <div style={{ marginTop: '14px', paddingLeft: '20px', borderLeft: '2px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                          {(repliesByParent.get(comment.id) ?? []).map((reply) => (
+                            <div key={reply.id}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                                <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'rgba(190,242,100,0.08)', border: '1px solid rgba(190,242,100,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontWeight: 700, fontSize: '0.75rem', flexShrink: 0 }}>
+                                  {reply.profiles?.display_name?.charAt(0).toUpperCase() ?? 'U'}
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                  {reply.profiles?.username ? (
+                                    <Link href={`/users/${reply.profiles.username}`} style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)', textDecoration: 'none' }}>{reply.profiles.display_name}</Link>
+                                  ) : (
+                                    <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)' }}>Anonymous</span>
+                                  )}
+                                  <span className="mono" style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginLeft: '8px' }} title={new Date(reply.created_at).toLocaleString()}>{timeAgo(reply.created_at)}</span>
+                                </div>
+                                {reply.created_by === userId && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteComment(reply.id)}
+                                    disabled={deletingCommentId === reply.id}
+                                    className="btn-ghost"
+                                    style={{ fontSize: '0.68rem', padding: '3px 8px', flexShrink: 0, color: 'var(--danger)', opacity: deletingCommentId === reply.id ? 0.5 : 1 }}
+                                  >
+                                    {deletingCommentId === reply.id ? 'Deleting...' : 'Delete'}
+                                  </button>
+                                )}
+                              </div>
+                              <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7, fontSize: '0.88rem' }}>{reply.content}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

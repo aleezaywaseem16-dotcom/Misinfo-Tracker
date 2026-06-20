@@ -321,7 +321,12 @@ function ClaimsPage() {
                         fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.03em",
                         flexWrap: "wrap",
                       }}>
-                        <span>@{claim.profiles?.username ?? "unknown"}</span>
+                        <span
+                          onClick={(e) => { if (claim.profiles?.username) { e.preventDefault(); e.stopPropagation(); router.push(`/users/${claim.profiles.username}`); } }}
+                          style={{ cursor: claim.profiles?.username ? "pointer" : "default" }}
+                        >
+                          @{claim.profiles?.username ?? "unknown"}
+                        </span>
                         <span style={{ opacity: 0.4 }}>·</span>
                         <span title={new Date(claim.created_at).toLocaleString()}>{timeAgo(claim.created_at)}</span>
                         {claim.estimated_origin_at && (

@@ -154,7 +154,12 @@ export default function WatchlistPage() {
                       {claim.title}
                     </h3>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-muted)" }}>
-                      <span>@{claim.profiles?.username ?? "unknown"}</span>
+                      <span
+                        onClick={(e) => { if (claim.profiles?.username) { e.preventDefault(); e.stopPropagation(); router.push(`/users/${claim.profiles.username}`); } }}
+                        style={{ cursor: claim.profiles?.username ? "pointer" : "default" }}
+                      >
+                        @{claim.profiles?.username ?? "unknown"}
+                      </span>
                       <span style={{ opacity: 0.4 }}>·</span>
                       <span title={new Date(row.created_at).toLocaleString()}>Watched {timeAgo(row.created_at)}</span>
                     </div>

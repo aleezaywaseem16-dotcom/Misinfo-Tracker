@@ -381,7 +381,9 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
                 </span>
                 <span style={{ color: 'var(--border)' }}>·</span>
                 <span className="mono" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                  by @{claim.profiles?.username ?? 'unknown'}
+                  by {claim.profiles?.username
+                    ? <Link href={`/users/${claim.profiles.username}`} style={{ color: 'var(--text-muted)' }}>@{claim.profiles.username}</Link>
+                    : '@unknown'}
                 </span>
                 <span style={{ color: 'var(--border)' }}>·</span>
                 <span className="mono" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }} title={new Date(claim.created_at).toLocaleString()}>
@@ -564,12 +566,16 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
                     <div key={item.id} className="evidence-card" style={{ animationDelay: `${index * 0.04}s` }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
                         {item.profiles && (
-                          <span style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.16em', color: 'var(--accent)', background: 'rgba(190,242,100,0.08)', borderRadius: '999px', padding: '2px 12px' }}>
+                          <Link href={`/users/${item.profiles.username}`} style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.16em', color: 'var(--accent)', background: 'rgba(190,242,100,0.08)', borderRadius: '999px', padding: '2px 12px', textDecoration: 'none' }}>
                             @{item.profiles.display_name}
-                          </span>
+                          </Link>
                         )}
                         <span className="mono" title={new Date(item.created_at).toLocaleString()}>{timeAgo(item.created_at)}</span>
-                        <span className="mono" style={{ marginLeft: 'auto' }}>@{item.profiles?.username ?? 'source'}</span>
+                        {item.profiles?.username ? (
+                          <Link href={`/users/${item.profiles.username}`} className="mono" style={{ marginLeft: 'auto' }}>@{item.profiles.username}</Link>
+                        ) : (
+                          <span className="mono" style={{ marginLeft: 'auto' }}>@source</span>
+                        )}
                       </div>
                       {item.title && <h3 style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '1rem', marginBottom: '6px' }}>{item.title}</h3>}
                       {item.image_url && (
@@ -621,7 +627,11 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
                           {comment.profiles?.display_name?.charAt(0).toUpperCase() ?? 'U'}
                         </div>
                         <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>{comment.profiles?.display_name ?? 'Anonymous'}</div>
+                          {comment.profiles?.username ? (
+                            <Link href={`/users/${comment.profiles.username}`} style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', textDecoration: 'none' }}>{comment.profiles.display_name}</Link>
+                          ) : (
+                            <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>Anonymous</div>
+                          )}
                           <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }} title={new Date(comment.created_at).toLocaleString()}>{timeAgo(comment.created_at)}</div>
                         </div>
                         {comment.created_by === userId && (
@@ -695,8 +705,15 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
             <div className="card" style={{ padding: '18px 20px' }}>
               <div className="eyebrow" style={{ marginBottom: '10px' }}>Quick details</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Created by</span>
+                  {claim.profiles?.username ? (
+                    <Link href={`/users/${claim.profiles.username}`} style={{ fontSize: '0.75rem', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>@{claim.profiles.username}</Link>
+                  ) : (
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>@unknown</span>
+                  )}
+                </div>
                 {[
-                  { label: 'Created by', value: `@${claim.profiles?.username ?? 'unknown'}` },
                   { label: 'Created', value: timeAgo(claim.created_at) },
                   { label: 'Evidence', value: `${evidence.length} source${evidence.length !== 1 ? 's' : ''}` },
                   { label: 'Visibility', value: claim.visibility },

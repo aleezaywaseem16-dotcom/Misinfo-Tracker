@@ -252,7 +252,10 @@ export default function Dashboard() {
                       {claim.title}
                     </h3>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px' }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                      <span
+                        onClick={(e) => { if (claim.profiles?.username) { e.preventDefault(); e.stopPropagation(); router.push(`/users/${claim.profiles.username}`); } }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', color: 'var(--text-muted)', cursor: claim.profiles?.username ? 'pointer' : 'default' }}
+                      >
                         <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                         @{claim.profiles?.username ?? "unknown"}
                       </span>

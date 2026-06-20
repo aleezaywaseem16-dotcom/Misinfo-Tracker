@@ -42,7 +42,20 @@ export default function Navbar() {
         setIsAdmin(false);
       }
     });
-    return () => listener.subscription.unsubscribe();
+
+    // Profile page dispatches this after an avatar upload/removal so the
+    // navbar reflects it immediately instead of waiting for the next auth event.
+    function handleProfileUpdated() {
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        if (user) loadUser(user.id);
+      });
+    }
+    window.addEventListener("profile-avatar-updated", handleProfileUpdated);
+
+    return () => {
+      listener.subscription.unsubscribe();
+      window.removeEventListener("profile-avatar-updated", handleProfileUpdated);
+    };
   }, []);
 
   useEffect(() => {

@@ -484,3 +484,25 @@ create policy "evidence images auth upload" on storage.objects for insert
   with check (bucket_id = 'evidence-images' and auth.uid() is not null);
 create policy "evidence images own delete" on storage.objects for delete
   using (bucket_id = 'evidence-images' and owner = auth.uid());
+
+-- ============================================================
+-- STORAGE — avatars
+-- ============================================================
+insert into storage.buckets (id, name, public)
+values ('avatars', 'avatars', true)
+on conflict (id) do nothing;
+
+drop policy if exists "avatars public read"  on storage.objects;
+drop policy if exists "avatars own upload"   on storage.objects;
+drop policy if exists "avatars own update"   on storage.objects;
+drop policy if exists "avatars own delete"   on storage.objects;
+create policy "avatars public read" on storage.objects for select
+  using (bucket_id = 'avatars');
+-- objects are stored at "{user_id}/avatar.{ext}" — only the owner of that
+-- folder may write into it, so users cannot overwrite each other's avatars.
+create policy "avatars own upload" on storage.objects for insert
+  with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+create policy "avatars own update" on storage.objects for update
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+create policy "avatars own delete" on storage.objects for delete
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);

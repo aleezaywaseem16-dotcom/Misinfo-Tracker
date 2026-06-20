@@ -1,11 +1,15 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import { supabase } from "@/lib/supabase";
 
 interface Profile { display_name: string; username: string; bio: string | null; avatar_url: string | null; created_at: string; }
+
+const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
+const ACCEPTED_AVATAR_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -15,6 +19,8 @@ export default function ProfilePage() {
   const [form, setForm] = useState({ display_name: "", bio: "" });
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarError, setAvatarError] = useState("");
 
   useEffect(() => {
     async function init() {
@@ -42,6 +48,59 @@ export default function ProfilePage() {
     setForm({ display_name: profile.display_name ?? "", bio: profile.bio ?? "" });
     setError("");
     setSaved(false);
+  }
+
+  async function handleAvatarFile(file: File) {
+    setAvatarError("");
+    if (!ACCEPTED_AVATAR_TYPES.includes(file.type)) {
+      setAvatarError("Please upload a PNG, JPEG, WEBP, or GIF image.");
+      return;
+    }
+    if (file.size > MAX_AVATAR_BYTES) {
+      setAvatarError("Image must be smaller than 5MB.");
+      return;
+    }
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setAvatarError("You must be signed in."); return; }
+
+    setUploadingAvatar(true);
+    try {
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `${user.id}/avatar.${ext}`;
+      const { error: uploadErr } = await supabase.storage.from("avatars").upload(path, file, { cacheControl: "3600", upsert: true });
+      if (uploadErr) throw uploadErr;
+
+      const { data: publicData } = supabase.storage.from("avatars").getPublicUrl(path);
+      const avatarUrl = `${publicData.publicUrl}?t=${Date.now()}`;
+
+      const { error: updateErr } = await supabase.from("profiles").update({ avatar_url: avatarUrl, updated_at: new Date().toISOString() }).eq("id", user.id);
+      if (updateErr) throw updateErr;
+
+      setProfile((prev) => (prev ? { ...prev, avatar_url: avatarUrl } : prev));
+      window.dispatchEvent(new Event("profile-avatar-updated"));
+    } catch (err) {
+      setAvatarError(err instanceof Error ? err.message : "Failed to upload avatar.");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  }
+
+  async function handleRemoveAvatar() {
+    setAvatarError("");
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setAvatarError("You must be signed in."); return; }
+
+    setUploadingAvatar(true);
+    try {
+      const { error: updateErr } = await supabase.from("profiles").update({ avatar_url: null, updated_at: new Date().toISOString() }).eq("id", user.id);
+      if (updateErr) throw updateErr;
+      setProfile((prev) => (prev ? { ...prev, avatar_url: null } : prev));
+      window.dispatchEvent(new Event("profile-avatar-updated"));
+    } catch (err) {
+      setAvatarError(err instanceof Error ? err.message : "Failed to remove avatar.");
+    } finally {
+      setUploadingAvatar(false);
+    }
   }
 
   const isDirty = !!profile && (form.display_name !== (profile.display_name ?? "") || form.bio !== (profile.bio ?? ""));
@@ -77,6 +136,33 @@ export default function ProfilePage() {
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '28px' }}>Manage your display name and bio.</p>
         <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div className="card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            <div>
+              <label style={labelStyle}>Avatar</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'var(--accent-dim)', border: '1px solid var(--accent-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, color: 'var(--accent)', fontWeight: 700, fontSize: '1.3rem' }}>
+                  {profile?.avatar_url
+                    ? <Image src={profile.avatar_url} alt="" width={64} height={64} unoptimized style={{ objectFit: 'cover', width: '100%', height: '100%' }} />
+                    : (profile?.display_name?.charAt(0).toUpperCase() ?? 'U')}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    disabled={uploadingAvatar}
+                    onChange={(e) => { const file = e.target.files?.[0]; if (file) void handleAvatarFile(file); e.target.value = ""; }}
+                    className="input-field"
+                    style={{ fontSize: '0.78rem', padding: '8px' }}
+                  />
+                  {profile?.avatar_url && (
+                    <button type="button" onClick={handleRemoveAvatar} disabled={uploadingAvatar} className="btn-secondary" style={{ fontSize: '0.75rem', padding: '5px 12px', alignSelf: 'flex-start' }}>
+                      Remove avatar
+                    </button>
+                  )}
+                </div>
+              </div>
+              {uploadingAvatar && <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '8px' }}>Uploading...</p>}
+              {avatarError && <p style={{ fontSize: '0.72rem', color: 'var(--danger)', marginTop: '8px' }}>{avatarError}</p>}
+            </div>
             <div>
               <label style={labelStyle}>Username</label>
               <div className="input-field" style={{ opacity: 0.6, cursor: 'not-allowed' }}>@{profile?.username}</div>

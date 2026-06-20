@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import Navbar from "@/components/Navbar";
 import Toast from "@/components/Toast";
+import DatePicker from "@/components/DatePicker";
 
 interface Category { id: string; name: string; }
 interface Tag { id: string; name: string; }
@@ -241,13 +242,12 @@ export default function NewClaimPage() {
 
             <div>
               <label style={labelStyle}>Estimated Origin Date</label>
-              <input
-                type="date"
+              <DatePicker
                 value={form.estimated_origin_at}
-                onChange={(e) => setForm({ ...form, estimated_origin_at: e.target.value })}
-                className="input-field"
+                onChange={(value) => setForm({ ...form, estimated_origin_at: value })}
+                placeholder="Select a date"
               />
-              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '5px' }}>Leave blank to use today as the origin date</p>
+              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '5px' }}>Leave blank to use today as the origin date. Future dates aren&apos;t allowed.</p>
             </div>
           </div>
 

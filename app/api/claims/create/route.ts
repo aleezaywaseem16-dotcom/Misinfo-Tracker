@@ -35,7 +35,18 @@ export async function POST(req: Request) {
     const safeSourceType = typeof sourceType === "string" && (VALID_SOURCE_TYPES as readonly string[]).includes(sourceType)
       ? (sourceType as (typeof VALID_SOURCE_TYPES)[number]) : "link";
     const safeCategoryId = typeof category_id === "string" && isValidUUID(category_id) ? category_id : null;
-    const safeOriginAt = typeof estimated_origin_at === "string" && estimated_origin_at ? estimated_origin_at : null;
+
+    let safeOriginAt: string | null = null;
+    if (typeof estimated_origin_at === "string" && estimated_origin_at) {
+      const parsed = new Date(estimated_origin_at);
+      if (Number.isNaN(parsed.getTime())) {
+        return NextResponse.json({ error: "estimated_origin_at must be a valid date" }, { status: 400 });
+      }
+      if (parsed.getTime() > Date.now()) {
+        return NextResponse.json({ error: "Estimated origin date cannot be in the future" }, { status: 400 });
+      }
+      safeOriginAt = estimated_origin_at;
+    }
 
     const { data: claim, error: claimErr } = await supabase
       .from("claims")

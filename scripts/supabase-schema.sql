@@ -129,15 +129,21 @@ alter table claims add column if not exists estimated_origin_at timestamptz;
 alter table claims add column if not exists deleted_at          timestamptz;
 alter table claims add column if not exists updated_at          timestamptz not null default now();
 
--- legacy column rename (older deployments used "submitted_by"; app code expects "created_by")
+-- legacy column rename (older deployments used "submitted_by"; app code expects "created_by").
+-- Handles the case where an earlier partial run already added "created_by" as a
+-- separate column alongside "submitted_by" (which breaks PostgREST embedding by
+-- creating two FKs to profiles) by merging data and dropping the legacy column.
 do $$ begin
-  if exists (select 1 from information_schema.columns where table_name = 'claims' and column_name = 'submitted_by')
-     and not exists (select 1 from information_schema.columns where table_name = 'claims' and column_name = 'created_by') then
-    alter table claims rename column submitted_by to created_by;
-  end if;
-  if exists (select 1 from pg_constraint where conrelid = 'claims'::regclass and conname = 'claims_submitted_by_fkey')
-     and not exists (select 1 from pg_constraint where conrelid = 'claims'::regclass and conname = 'claims_created_by_fkey') then
-    alter table claims rename constraint claims_submitted_by_fkey to claims_created_by_fkey;
+  if exists (select 1 from information_schema.columns where table_name = 'claims' and column_name = 'submitted_by') then
+    if not exists (select 1 from information_schema.columns where table_name = 'claims' and column_name = 'created_by') then
+      alter table claims rename column submitted_by to created_by;
+      if exists (select 1 from pg_constraint where conrelid = 'claims'::regclass and conname = 'claims_submitted_by_fkey') then
+        alter table claims rename constraint claims_submitted_by_fkey to claims_created_by_fkey;
+      end if;
+    else
+      update claims set created_by = coalesce(created_by, submitted_by) where created_by is null;
+      alter table claims drop column submitted_by;
+    end if;
   end if;
 end $$;
 alter table claims add column if not exists created_by uuid references profiles(id) on delete set null;
@@ -216,13 +222,16 @@ alter table evidence add column if not exists image_url    text;
 alter table evidence add column if not exists platform_id  uuid references platforms(id) on delete set null;
 
 do $$ begin
-  if exists (select 1 from information_schema.columns where table_name = 'evidence' and column_name = 'submitted_by')
-     and not exists (select 1 from information_schema.columns where table_name = 'evidence' and column_name = 'created_by') then
-    alter table evidence rename column submitted_by to created_by;
-  end if;
-  if exists (select 1 from pg_constraint where conrelid = 'evidence'::regclass and conname = 'evidence_submitted_by_fkey')
-     and not exists (select 1 from pg_constraint where conrelid = 'evidence'::regclass and conname = 'evidence_created_by_fkey') then
-    alter table evidence rename constraint evidence_submitted_by_fkey to evidence_created_by_fkey;
+  if exists (select 1 from information_schema.columns where table_name = 'evidence' and column_name = 'submitted_by') then
+    if not exists (select 1 from information_schema.columns where table_name = 'evidence' and column_name = 'created_by') then
+      alter table evidence rename column submitted_by to created_by;
+      if exists (select 1 from pg_constraint where conrelid = 'evidence'::regclass and conname = 'evidence_submitted_by_fkey') then
+        alter table evidence rename constraint evidence_submitted_by_fkey to evidence_created_by_fkey;
+      end if;
+    else
+      update evidence set created_by = coalesce(created_by, submitted_by) where created_by is null;
+      alter table evidence drop column submitted_by;
+    end if;
   end if;
 end $$;
 alter table evidence add column if not exists created_by uuid references profiles(id) on delete set null;
@@ -244,25 +253,34 @@ alter table comments add column if not exists deleted_at timestamptz;
 alter table comments add column if not exists updated_at timestamptz not null default now();
 
 do $$ begin
-  if exists (select 1 from information_schema.columns where table_name = 'comments' and column_name = 'author_id')
-     and not exists (select 1 from information_schema.columns where table_name = 'comments' and column_name = 'created_by') then
-    alter table comments rename column author_id to created_by;
-  end if;
-  if exists (select 1 from pg_constraint where conrelid = 'comments'::regclass and conname = 'comments_author_id_fkey')
-     and not exists (select 1 from pg_constraint where conrelid = 'comments'::regclass and conname = 'comments_created_by_fkey') then
-    alter table comments rename constraint comments_author_id_fkey to comments_created_by_fkey;
+  if exists (select 1 from information_schema.columns where table_name = 'comments' and column_name = 'author_id') then
+    if not exists (select 1 from information_schema.columns where table_name = 'comments' and column_name = 'created_by') then
+      alter table comments rename column author_id to created_by;
+      if exists (select 1 from pg_constraint where conrelid = 'comments'::regclass and conname = 'comments_author_id_fkey') then
+        alter table comments rename constraint comments_author_id_fkey to comments_created_by_fkey;
+      end if;
+    else
+      -- both columns exist from a partial earlier migration — having two FKs to
+      -- profiles makes PostgREST's implicit "profiles ( ... )" embed ambiguous
+      -- and silently fail, so merge the data and drop the legacy column.
+      update comments set created_by = coalesce(created_by, author_id) where created_by is null;
+      alter table comments drop column author_id;
+    end if;
   end if;
 end $$;
 alter table comments add column if not exists created_by uuid references profiles(id) on delete set null;
 
 do $$ begin
-  if exists (select 1 from information_schema.columns where table_name = 'comments' and column_name = 'parent_id')
-     and not exists (select 1 from information_schema.columns where table_name = 'comments' and column_name = 'parent_comment_id') then
-    alter table comments rename column parent_id to parent_comment_id;
-  end if;
-  if exists (select 1 from pg_constraint where conrelid = 'comments'::regclass and conname = 'comments_parent_id_fkey')
-     and not exists (select 1 from pg_constraint where conrelid = 'comments'::regclass and conname = 'comments_parent_comment_id_fkey') then
-    alter table comments rename constraint comments_parent_id_fkey to comments_parent_comment_id_fkey;
+  if exists (select 1 from information_schema.columns where table_name = 'comments' and column_name = 'parent_id') then
+    if not exists (select 1 from information_schema.columns where table_name = 'comments' and column_name = 'parent_comment_id') then
+      alter table comments rename column parent_id to parent_comment_id;
+      if exists (select 1 from pg_constraint where conrelid = 'comments'::regclass and conname = 'comments_parent_id_fkey') then
+        alter table comments rename constraint comments_parent_id_fkey to comments_parent_comment_id_fkey;
+      end if;
+    else
+      update comments set parent_comment_id = coalesce(parent_comment_id, parent_id) where parent_comment_id is null;
+      alter table comments drop column parent_id;
+    end if;
   end if;
 end $$;
 alter table comments add column if not exists parent_comment_id uuid references comments(id) on delete cascade;

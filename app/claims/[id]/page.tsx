@@ -135,9 +135,10 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
   }, [id]);
 
   const loadComments = useCallback(async () => {
-    const { data } = await supabase.from("comments")
-      .select(`id, content, created_at, parent_comment_id, profiles ( display_name, username, avatar_url )`)
+    const { data, error } = await supabase.from("comments")
+      .select(`id, content, created_at, parent_comment_id, profiles!comments_created_by_fkey ( display_name, username, avatar_url )`)
       .eq("claim_id", id).is("deleted_at", null).order("created_at", { ascending: true });
+    if (error) console.error("Failed to load comments:", error.message);
     setComments((data as unknown as Comment[]) ?? []);
   }, [id]);
 

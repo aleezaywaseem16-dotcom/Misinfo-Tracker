@@ -1,9 +1,10 @@
 "use client";
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import Navbar from "@/components/Navbar";
+import DatePicker from "@/components/DatePicker";
 
 interface Claim {
   id: string;
@@ -34,6 +35,11 @@ const STATUS_META: Record<string, { label: string; cls: string }> = {
   disputed:      { label: "DISPUTED",      cls: "status-disputed"      },
   archived:      { label: "ARCHIVED",      cls: "status-archived"      },
 };
+
+function parseDateOnly(dateStr: string) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
 
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -71,6 +77,15 @@ function ClaimsPage() {
   const [savedView, setSavedView] = useState("all");
   const [watchlist, setWatchlist] = useState<string[]>([]);
   const [watchlistClaims, setWatchlistClaims] = useState<Claim[]>([]);
+  const isFirstPageRender = useRef(true);
+
+  // Scroll back to the top of the results when changing pages, so users
+  // aren't left scrolled down at the pagination controls looking at the
+  // previous page's last items while the new page renders above them.
+  useEffect(() => {
+    if (isFirstPageRender.current) { isFirstPageRender.current = false; return; }
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [page]);
 
   // Wrap each filter setter so changing a filter also resets pagination back to page 1.
   function updateSearch(value: string) { setSearch(value); setPage(0); }
@@ -228,23 +243,16 @@ function ClaimsPage() {
             <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
               Origin date range
             </span>
-            <input
-              type="date"
+            <DatePicker
               value={dateFrom}
-              onChange={(e) => updateDateFrom(e.target.value)}
-              max={dateTo || undefined}
-              className="input-field"
-              style={{ fontSize: 12 }}
-              aria-label="Origin date from"
+              onChange={updateDateFrom}
+              placeholder="From"
+              maxDate={dateTo ? parseDateOnly(dateTo) : undefined}
             />
-            <input
-              type="date"
+            <DatePicker
               value={dateTo}
-              onChange={(e) => updateDateTo(e.target.value)}
-              min={dateFrom || undefined}
-              className="input-field"
-              style={{ fontSize: 12 }}
-              aria-label="Origin date to"
+              onChange={updateDateTo}
+              placeholder="To"
             />
             {(dateFrom || dateTo) && (
               <button type="button" onClick={() => { updateDateFrom(""); updateDateTo(""); }} className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px" }}>

@@ -405,7 +405,7 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
         </div>
 
         {/* Two-column layout */}
-        <div className="grid gap-6 lg:grid-cols-[1fr_360px]" style={{ alignItems: 'start' }}>
+        <div className="grid gap-6 lg:grid-cols-[1fr_360px]" style={{ alignItems: 'stretch' }}>
 
           {/* ─── LEFT COLUMN: main content ─── */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0 }}>
@@ -862,6 +862,9 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
               <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
               Add Evidence
             </Link>
+
+            {/* Absorbs leftover height so the sidebar's bottom edge lines up with the main column instead of the cards stretching apart */}
+            <div style={{ flex: 1 }} />
           </aside>
         </div>
       </div>

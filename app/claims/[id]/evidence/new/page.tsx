@@ -152,6 +152,7 @@ export default function AddEvidencePage({ params }: { params: Promise<{ id: stri
                   className="input-field"
                   maxLength={200}
                 />
+                <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 5 }}>{form.title.length}/200</p>
               </div>
               <div>
                 <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>Description</label>
@@ -161,7 +162,9 @@ export default function AddEvidencePage({ params }: { params: Promise<{ id: stri
                   placeholder="Describe what this evidence shows, how it relates to the claim..."
                   rows={4}
                   className="input-field"
+                  maxLength={2000}
                 />
+                <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 5 }}>{form.content.length}/2000</p>
               </div>
             </div>
           </div>

@@ -578,8 +578,12 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
                       rows={4}
                       className="input-field"
                       style={{ width: '100%', marginTop: '12px', resize: 'none' }}
+                      maxLength={1000}
                     />
-                    <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
+                    <div style={{ marginTop: '6px', display: 'flex', justifyContent: 'flex-end' }}>
+                      <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{newComment.length}/1000</p>
+                    </div>
+                    <div style={{ marginTop: '6px', display: 'flex', justifyContent: 'flex-end' }}>
                       <button type="submit" disabled={submittingComment || !newComment.trim()} className="btn-primary" style={{ opacity: submittingComment || !newComment.trim() ? 0.6 : 1 }}>
                         {submittingComment ? 'Posting...' : 'Post comment'}
                       </button>

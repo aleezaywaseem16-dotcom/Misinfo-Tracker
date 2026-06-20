@@ -85,10 +85,12 @@ export default function ProfilePage() {
             <div>
               <label style={labelStyle}>Display name</label>
               <input type="text" value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} className="input-field" maxLength={80} />
+              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '5px' }}>{form.display_name.length}/80</p>
             </div>
             <div>
               <label style={labelStyle}>Bio</label>
               <textarea value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} className="input-field" style={{ resize: 'none' }} rows={3} maxLength={300} placeholder="A short bio..." />
+              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '5px' }}>{form.bio.length}/300</p>
             </div>
           </div>
           {error && (

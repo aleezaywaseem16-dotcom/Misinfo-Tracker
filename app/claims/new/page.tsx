@@ -172,7 +172,9 @@ export default function NewClaimPage() {
                 rows={4}
                 className="input-field"
                 style={{ resize: 'none' }}
+                maxLength={2000}
               />
+              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '5px' }}>{form.description.length}/2000</p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: '14px' }}>

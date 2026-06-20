@@ -18,6 +18,8 @@ export default function NewClaimPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [uploadingSourceImage, setUploadingSourceImage] = useState(false);
+  const [sourceImageError, setSourceImageError] = useState("");
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -89,11 +91,43 @@ export default function NewClaimPage() {
     );
   }
 
+  const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+  const ACCEPTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+
+  async function handleSourceImageFile(file: File) {
+    setSourceImageError("");
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+      setSourceImageError("Please upload a PNG, JPEG, WEBP, or GIF image.");
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      setSourceImageError("Image must be smaller than 5MB.");
+      return;
+    }
+    if (!userId) return;
+    setUploadingSourceImage(true);
+    try {
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `${userId}/claim-source-${Date.now()}.${ext}`;
+      const { error: uploadErr } = await supabase.storage.from("evidence-images").upload(path, file, { cacheControl: "3600", upsert: false });
+      if (uploadErr) throw uploadErr;
+      const { data: publicData } = supabase.storage.from("evidence-images").getPublicUrl(path);
+      setForm((prev) => ({ ...prev, sourceUrl: publicData.publicUrl }));
+    } catch (err) {
+      setSourceImageError(err instanceof Error ? err.message : "Failed to upload image.");
+    } finally {
+      setUploadingSourceImage(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!userId) return;
     if (!form.title.trim()) { setError("Title is required."); return; }
-    if (!form.sourceUrl.trim()) { setError("A source URL is required to submit a claim."); return; }
+    if (!form.sourceUrl.trim()) {
+      setError(form.sourceType === "image" ? "A source image is required to submit a claim." : "A source URL is required to submit a claim.");
+      return;
+    }
     try {
       new URL(form.sourceUrl);
     } catch {
@@ -224,21 +258,10 @@ export default function NewClaimPage() {
             </div>
 
             <div>
-              <label style={labelStyle}>Source URL <span style={{ color: 'var(--accent)' }}>*</span></label>
-              <input
-                type="url"
-                value={form.sourceUrl}
-                onChange={(e) => setForm({ ...form, sourceUrl: e.target.value })}
-                placeholder="https://example.com/article"
-                className="input-field"
-              />
-            </div>
-
-            <div>
               <label style={labelStyle}>Source Type</label>
               <select
                 value={form.sourceType}
-                onChange={(e) => setForm({ ...form, sourceType: e.target.value })}
+                onChange={(e) => setForm({ ...form, sourceType: e.target.value, sourceUrl: "" })}
                 className="input-field"
               >
                 <option value="link">Link (highest priority)</option>
@@ -247,6 +270,41 @@ export default function NewClaimPage() {
                 <option value="text">Text (lowest priority)</option>
               </select>
             </div>
+
+            {form.sourceType === "image" ? (
+              <div>
+                <label style={labelStyle}>Source Image <span style={{ color: 'var(--accent)' }}>*</span></label>
+                {form.sourceUrl && (
+                  <div style={{ marginBottom: 10, maxWidth: 260 }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={form.sourceUrl} alt="Source preview" style={{ width: '100%', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', display: 'block' }} />
+                    <button type="button" onClick={() => setForm({ ...form, sourceUrl: "" })} className="btn-secondary" style={{ marginTop: 8, fontSize: 12, padding: '5px 10px' }}>
+                      Remove image
+                    </button>
+                  </div>
+                )}
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  disabled={uploadingSourceImage}
+                  onChange={(e) => { const file = e.target.files?.[0]; if (file) void handleSourceImageFile(file); e.target.value = ""; }}
+                  className="input-field"
+                />
+                {uploadingSourceImage && <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>Uploading...</p>}
+                {sourceImageError && <p style={{ fontSize: 12, color: 'var(--danger)', marginTop: 6 }}>{sourceImageError}</p>}
+              </div>
+            ) : (
+              <div>
+                <label style={labelStyle}>Source URL <span style={{ color: 'var(--accent)' }}>*</span></label>
+                <input
+                  type="url"
+                  value={form.sourceUrl}
+                  onChange={(e) => setForm({ ...form, sourceUrl: e.target.value })}
+                  placeholder="https://example.com/article"
+                  className="input-field"
+                />
+              </div>
+            )}
           </div>
 
           {tags.length > 0 && (
@@ -283,9 +341,9 @@ export default function NewClaimPage() {
             </Link>
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || uploadingSourceImage}
               className="btn-primary"
-              style={{ flex: 1, justifyContent: 'center', opacity: submitting ? 0.6 : 1 }}
+              style={{ flex: 1, justifyContent: 'center', opacity: submitting || uploadingSourceImage ? 0.6 : 1 }}
             >
               {submitting ? "Submitting..." : "Submit Claim"}
             </button>

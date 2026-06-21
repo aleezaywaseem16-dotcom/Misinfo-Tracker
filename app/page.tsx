@@ -92,6 +92,13 @@ export default function HomePage() {
     }
 
     load()
+    // Refetch periodically so the "LIVE" feed/stats actually update on
+    // their own instead of only ever reflecting whatever was true the
+    // moment the page first loaded. load() doesn't set loading back to
+    // true, so refetches update the numbers in place without re-showing
+    // the skeleton state.
+    const intervalId = window.setInterval(load, 30000)
+    return () => window.clearInterval(intervalId)
   }, [router])
 
   const feedClaims = claims.length >= 2 ? [...claims, ...claims] : claims

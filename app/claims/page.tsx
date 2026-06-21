@@ -132,16 +132,19 @@ function ClaimsPage() {
     }
   }, []);
 
+  // Claims have a public visibility tier and an RLS policy explicitly
+  // allowing anonymous reads — the homepage's "Browse Claims" links rely on
+  // that. Only the watchlist summary actually needs a signed-in user, so
+  // that's the only part gated here; the page itself stays open to visitors.
   useEffect(() => {
     async function init() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push("/login"); return; }
       const { data: cats } = await supabase.from("categories").select("id, name");
       setCategories(cats ?? []);
-      void loadWatchlistSummary();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) void loadWatchlistSummary();
     }
     init();
-  }, [router, loadWatchlistSummary]);
+  }, [loadWatchlistSummary]);
 
   useEffect(() => {
     void Promise.resolve().then(() => { void loadClaims(); });

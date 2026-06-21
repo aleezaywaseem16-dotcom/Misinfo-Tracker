@@ -1,9 +1,17 @@
 import { NextResponse } from "next/server";
+import { createServerSupabaseClient } from "@/lib/supabase-server";
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const DEFAULT_MODEL = "llama-3.3-70b-versatile";
 
 export async function POST(request: Request) {
+  // This calls a paid third-party API on every request — without an auth
+  // check, anyone (including unauthenticated, scripted requests) could call
+  // it directly and burn through the GROQ_API_KEY quota at no cost to them.
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const body = await request.json().catch(() => ({}));
   const message = typeof body.message === "string" ? body.message.trim() : "";
 

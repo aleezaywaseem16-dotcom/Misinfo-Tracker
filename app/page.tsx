@@ -72,7 +72,7 @@ export default function HomePage() {
         supabase.from('claims').select('*', { count: 'exact', head: true }).eq('status', 'investigating').eq('visibility', 'public').is('deleted_at', null),
         supabase.from('claims').select('*', { count: 'exact', head: true }).eq('status', 'debunked').eq('visibility', 'public').is('deleted_at', null),
         supabase.from('claims').select('*', { count: 'exact', head: true }).eq('status', 'confirmed').eq('visibility', 'public').is('deleted_at', null),
-        supabase.from('evidence').select('*', { count: 'exact', head: true }),
+        supabase.from('evidence').select('*', { count: 'exact', head: true }).is('deleted_at', null),
         supabase.from('claims')
           .select('id, title, status, created_at')
           .eq('visibility', 'public')

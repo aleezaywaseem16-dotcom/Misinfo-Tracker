@@ -1,7 +1,6 @@
 "use client";
 import { FormEvent, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import Navbar from "@/components/Navbar";
 
@@ -89,7 +88,6 @@ const quickChatPrompts = [
 
 export default function ClaimDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
   const [claim, setClaim] = useState<Claim | null>(null);
   const [evidence, setEvidence] = useState<Evidence[]>([]);
@@ -127,7 +125,7 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
   const loadClaim = useCallback(async () => {
     const { data } = await supabase.from("claims")
       .select(`id, title, description, status, visibility, estimated_origin_at, created_at, created_by, source_url, source_type, profiles!claims_created_by_fkey ( display_name, username, avatar_url ), categories ( name )`)
-      .eq("id", id).single();
+      .eq("id", id).is("deleted_at", null).single();
     if (data) setClaim(data as unknown as Claim);
   }, [id]);
 
@@ -138,7 +136,7 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
     setEvidence((data as unknown as Evidence[]) ?? []);
   }, [id]);
 
-  const loadVotes = useCallback(async (uid: string) => {
+  const loadVotes = useCallback(async (uid?: string) => {
     const { data: allVotes } = await supabase.from("claim_votes").select("vote_type, user_id").eq("claim_id", id);
     if (allVotes) {
       const votes = allVotes as Array<{ vote_type: string; user_id: string }>;
@@ -146,7 +144,7 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
         upvotes: votes.filter((v) => v.vote_type === "upvote").length,
         downvotes: votes.filter((v) => v.vote_type === "downvote").length,
       });
-      const myVote = votes.find((v) => v.user_id === uid);
+      const myVote = uid ? votes.find((v) => v.user_id === uid) : undefined;
       if (myVote) setUserVote(myVote.vote_type as "upvote" | "downvote");
     }
   }, [id]);
@@ -171,20 +169,30 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
     }
   }, [id]);
 
+  // Claims have a public visibility tier with an RLS policy allowing
+  // anonymous reads, so viewing a claim must not require being signed in —
+  // only the write actions (vote, comment, watchlist) do, and those already
+  // guard on userId individually. Same fix as the claims list page.
   useEffect(() => {
     async function init() {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push("/login"); return; }
-      setUserId(user.id);
-      await Promise.all([loadClaim(), loadEvidence(), loadComments(), loadVotes(user.id), refreshWatchState()]);
+      const tasks = [loadClaim(), loadEvidence(), loadComments()];
+      if (user) {
+        setUserId(user.id);
+        tasks.push(loadVotes(user.id), refreshWatchState());
+      } else {
+        tasks.push(loadVotes());
+      }
+      await Promise.all(tasks);
       setLoading(false);
     }
     init();
-  }, [id, router, loadClaim, loadEvidence, loadComments, refreshWatchState, loadVotes]);
+  }, [id, loadClaim, loadEvidence, loadComments, refreshWatchState, loadVotes]);
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages]);
 
   async function toggleWatch() {
+    if (!userId) { setWatchError("Sign in to add claims to your watchlist."); return; }
     setWatchError("");
     const nextWatching = !watching;
     setWatching(nextWatching);

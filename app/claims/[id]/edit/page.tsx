@@ -35,15 +35,22 @@ export default function EditClaimPage({ params }: { params: Promise<{ id: string
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); return; }
 
-      const { data: claim } = await supabase
-        .from("claims")
-        .select("title, description, visibility, category_id, estimated_origin_at, created_by")
-        .eq("id", id)
-        .is("deleted_at", null)
-        .maybeSingle();
+      const [{ data: claim }, { data: profile }] = await Promise.all([
+        supabase
+          .from("claims")
+          .select("title, description, visibility, category_id, estimated_origin_at, created_by")
+          .eq("id", id)
+          .is("deleted_at", null)
+          .maybeSingle(),
+        supabase.from("profiles").select("roles ( name )").eq("id", user.id).maybeSingle(),
+      ]);
 
       if (!claim) { setNotFound(true); setLoading(false); return; }
-      if (claim.created_by !== user.id) { setForbidden(true); setLoading(false); return; }
+      // Mirror update_claim's own-or-admin/moderator check server-side — otherwise
+      // an admin/moderator gets wrongly told they can't edit someone else's claim.
+      const roleName = (profile as { roles: { name: string } | null } | null)?.roles?.name;
+      const canEdit = claim.created_by === user.id || roleName === "admin" || roleName === "moderator";
+      if (!canEdit) { setForbidden(true); setLoading(false); return; }
 
       setForm({
         title: claim.title ?? "",

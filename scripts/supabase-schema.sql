@@ -682,9 +682,19 @@ create policy "chat history own delete" on user_chat_history for delete using (a
 -- ============================================================
 -- STORAGE — evidence images
 -- ============================================================
-insert into storage.buckets (id, name, public)
-values ('evidence-images', 'evidence-images', true)
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('evidence-images', 'evidence-images', true, 5242880, array['image/png','image/jpeg','image/webp','image/gif'])
 on conflict (id) do nothing;
+
+-- the insert above only applies file_size_limit/allowed_mime_types on first
+-- creation ("on conflict do nothing") — explicitly enforce them here too so
+-- a bucket created before this constraint existed still gets it. Without
+-- this, the 5MB/image-type checks in the upload forms are client-side only
+-- and trivially bypassed via a direct call to the Storage REST API.
+update storage.buckets
+  set file_size_limit = 5242880,
+      allowed_mime_types = array['image/png','image/jpeg','image/webp','image/gif']
+  where id = 'evidence-images';
 
 drop policy if exists "evidence images public read" on storage.objects;
 drop policy if exists "evidence images auth upload" on storage.objects;
@@ -699,9 +709,16 @@ create policy "evidence images own delete" on storage.objects for delete
 -- ============================================================
 -- STORAGE — avatars
 -- ============================================================
-insert into storage.buckets (id, name, public)
-values ('avatars', 'avatars', true)
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('avatars', 'avatars', true, 5242880, array['image/png','image/jpeg','image/webp','image/gif'])
 on conflict (id) do nothing;
+
+-- see the matching comment on the evidence-images bucket above — applies
+-- the same server-side enforcement here for a bucket created pre-constraint.
+update storage.buckets
+  set file_size_limit = 5242880,
+      allowed_mime_types = array['image/png','image/jpeg','image/webp','image/gif']
+  where id = 'avatars';
 
 drop policy if exists "avatars public read"  on storage.objects;
 drop policy if exists "avatars own upload"   on storage.objects;

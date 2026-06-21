@@ -52,7 +52,7 @@ export default function AddEvidencePage({ params }: { params: Promise<{ id: stri
   }
 
   const loadData = useCallback(async () => {
-    const { data } = await supabase.from("claims").select("id, title, status").eq("id", id).single();
+    const { data } = await supabase.from("claims").select("id, title, status").eq("id", id).is("deleted_at", null).single();
     if (data) setClaim(data as Claim);
   }, [id]);
 

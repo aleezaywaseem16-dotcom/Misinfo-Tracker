@@ -100,6 +100,14 @@ insert into categories (name, description, color) values
   ('Other',        'Miscellaneous misinformation',               '#6b7280')
 on conflict (name) do nothing;
 
+-- "unique" above is case-sensitive, so "Environment" and "ENVIRONMENT" can
+-- both exist as separate rows. Block case/whitespace variants of the same
+-- name going forward (existing dupes need a one-time cleanup — see
+-- scripts/fix-duplicate-categories.sql).
+create unique index if not exists categories_name_norm_idx
+  on categories (lower(trim(name)))
+  where deleted_at is null;
+
 -- ============================================================
 -- TAGS
 -- ============================================================

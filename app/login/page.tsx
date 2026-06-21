@@ -81,7 +81,9 @@ function LoginPage() {
 
         {sent ? (
           <div style={{ background: "rgba(190,242,100,0.06)", border: "1px solid rgba(190,242,100,0.22)", borderRadius: "2px", padding: "20px", textAlign: "center" }}>
-            <div style={{ fontSize: "2rem", marginBottom: "12px" }}>📬</div>
+            <svg width="32" height="32" fill="none" stroke="var(--accent)" viewBox="0 0 24 24" style={{ margin: "0 auto 12px" }}>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+            </svg>
             <p style={{ color: "var(--text-primary)", fontWeight: 600, marginBottom: "8px" }}>Check your inbox</p>
             <p style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>We sent a magic link to <strong style={{ color: "var(--text-secondary)" }}>{email}</strong>.</p>
             <button onClick={() => setSent(false)} style={{ marginTop: "16px", background: "none", border: "none", color: "var(--accent)", fontSize: "0.875rem", cursor: "pointer", textDecoration: "underline" }}>

@@ -187,8 +187,13 @@ export default function ProfilePage() {
             <button type="button" onClick={handleReset} disabled={!isDirty} className="btn-secondary" style={{ flex: 1, justifyContent: 'center', opacity: isDirty ? 1 : 0.5 }}>
               Reset
             </button>
-            <button type="submit" disabled={saving || !isDirty} className="btn-primary" style={{ flex: 2, justifyContent: 'center', opacity: saving || !isDirty ? 0.6 : 1 }}>
-              {saving ? "Saving..." : saved ? "✓ Saved!" : "Save profile"}
+            <button type="submit" disabled={saving || !isDirty} className="btn-primary" style={{ flex: 2, justifyContent: 'center', gap: '6px', opacity: saving || !isDirty ? 0.6 : 1 }}>
+              {saving ? "Saving..." : saved ? (
+                <>
+                  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4.5 12.75l6 6 9-13.5" /></svg>
+                  Saved!
+                </>
+              ) : "Save profile"}
             </button>
           </div>
         </form>

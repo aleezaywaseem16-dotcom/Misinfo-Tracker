@@ -107,7 +107,13 @@ export default function EditClaimPage({ params }: { params: Promise<{ id: string
       <div className="page-content" style={{ minHeight: "100vh" }}>
         <Navbar />
         <div style={{ textAlign: "center", padding: "80px 24px", color: "var(--text-muted)" }}>
-          <div style={{ fontSize: "3rem", marginBottom: "16px" }}>{forbidden ? "🔒" : "🔍"}</div>
+          <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ margin: "0 auto 16px" }}>
+            {forbidden ? (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+            ) : (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+            )}
+          </svg>
           <p>{forbidden ? "You can only edit claims you created." : "Claim not found."}</p>
           <Link href={`/claims/${id}`} className="btn-ghost" style={{ textDecoration: "none", marginTop: "16px", display: "inline-flex" }}>← Back to claim</Link>
         </div>

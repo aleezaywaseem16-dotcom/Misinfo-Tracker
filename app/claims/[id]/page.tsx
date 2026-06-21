@@ -110,9 +110,19 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
   const [watchError, setWatchError] = useState("");
   const [voteError, setVoteError] = useState("");
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const tabsSectionRef = useRef<HTMLDivElement | null>(null);
   const [activeTab, setActiveTab] = useState<"evidence" | "comments">("evidence");
   const [watching, setWatching] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // Switches the tab AND scrolls it into view — buttons that jump to a tab
+  // from elsewhere on the page (sidebar, summary cards) live far from the
+  // tab section itself, so setting state alone leaves the change off-screen
+  // and looks like nothing happened.
+  function goToTab(tab: "evidence" | "comments") {
+    setActiveTab(tab);
+    tabsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   const loadClaim = useCallback(async () => {
     const { data } = await supabase.from("claims")
@@ -367,7 +377,9 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
     <div className="page-content" style={{ minHeight: '100vh' }}>
       <Navbar />
       <div style={{ textAlign: 'center', padding: '80px 24px', color: 'var(--text-muted)' }}>
-        <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🔍</div>
+        <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ margin: '0 auto 16px' }}>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+        </svg>
         <p>Claim not found.</p>
         <Link href="/claims" className="btn-ghost" style={{ textDecoration: 'none', marginTop: '16px', display: 'inline-flex' }}>← Back to claims</Link>
       </div>
@@ -489,7 +501,7 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
                   <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.18em', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>Evidence summary</div>
                   <h2 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: '5px' }}>Key findings</h2>
                 </div>
-                <button type="button" onClick={() => setActiveTab("evidence")} className="btn-secondary" style={{ fontSize: '0.78rem', padding: '7px 14px', flexShrink: 0 }}>
+                <button type="button" onClick={() => goToTab("evidence")} className="btn-secondary" style={{ fontSize: '0.78rem', padding: '7px 14px', flexShrink: 0 }}>
                   View all evidence
                 </button>
               </div>
@@ -528,12 +540,12 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
 
             {/* Community stat cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: '14px' }}>
-              <button type="button" onClick={() => setActiveTab("comments")} className="card card-clickable" style={{ padding: '20px 24px', textAlign: 'left', color: 'var(--text-primary)', height: '100%' }}>
+              <button type="button" onClick={() => goToTab("comments")} className="card card-clickable" style={{ padding: '20px 24px', textAlign: 'left', color: 'var(--text-primary)', height: '100%' }}>
                 <div className="eyebrow" style={{ marginBottom: '8px' }}>Community activity</div>
                 <div style={{ fontSize: '1.6rem', fontWeight: 800, fontFamily: 'var(--font-display)', letterSpacing: '-0.03em', lineHeight: 1 }}>{comments.length}</div>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '6px', lineHeight: 1.5 }}>comment{comments.length !== 1 ? 's' : ''} — follow the latest analysis</p>
               </button>
-              <button type="button" onClick={() => setActiveTab("evidence")} className="card card-clickable" style={{ padding: '20px 24px', textAlign: 'left', color: 'var(--text-primary)', height: '100%' }}>
+              <button type="button" onClick={() => goToTab("evidence")} className="card card-clickable" style={{ padding: '20px 24px', textAlign: 'left', color: 'var(--text-primary)', height: '100%' }}>
                 <div className="eyebrow" style={{ marginBottom: '8px' }}>Evidence collection</div>
                 <div style={{ fontSize: '1.6rem', fontWeight: 800, fontFamily: 'var(--font-display)', letterSpacing: '-0.03em', lineHeight: 1 }}>{evidence.length}</div>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '6px', lineHeight: 1.5 }}>source{evidence.length !== 1 ? 's' : ''} — links, screenshots, and data</p>
@@ -597,7 +609,7 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
             </div>
 
             {/* Tabs section */}
-            <div>
+            <div ref={tabsSectionRef}>
               <div className="tab-bar">
                 {(["evidence", "comments"] as const).map((tab) => (
                   <button key={tab} onClick={() => setActiveTab(tab)} className={`tab-item ${activeTab === tab ? 'active' : ''}`}>
@@ -813,8 +825,11 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
             {/* Watchlist */}
             <div className="card" style={{ padding: '18px 20px' }}>
               <div className="eyebrow" style={{ marginBottom: '10px' }}>Watchlist</div>
-              <div style={{ fontSize: '0.88rem', fontWeight: 600, color: watching ? 'var(--accent)' : 'var(--text-primary)', marginBottom: '6px' }}>
-                {watching ? '★ On your watchlist' : '☆ Not watching'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.88rem', fontWeight: 600, color: watching ? 'var(--accent)' : 'var(--text-primary)', marginBottom: '6px' }}>
+                <svg width="14" height="14" fill={watching ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11.48 3.5a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.562.562 0 00-.586 0L6.982 21.04a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.562.562 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" />
+                </svg>
+                {watching ? 'On your watchlist' : 'Not watching'}
               </div>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', lineHeight: 1.6, marginBottom: '12px' }}>
                 Keep this claim visible on your dashboard and receive an alert badge when it changes. View all watched claims on your <Link href="/watchlist" style={{ color: 'var(--accent)' }}>Watchlist page</Link>.
@@ -831,7 +846,7 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
                 <div className="eyebrow">Recent comments</div>
                 {comments.length > 0 && (
-                  <button type="button" onClick={() => setActiveTab('comments')} style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: '0.72rem', cursor: 'pointer', padding: 0 }}>
+                  <button type="button" onClick={() => goToTab('comments')} style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: '0.72rem', cursor: 'pointer', padding: 0 }}>
                     View all →
                   </button>
                 )}
@@ -839,7 +854,7 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
               {topLevelComments.length === 0 ? (
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', lineHeight: 1.6 }}>
                   No comments yet —{' '}
-                  <button type="button" onClick={() => setActiveTab('comments')} style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: '0.78rem', cursor: 'pointer', padding: 0 }}>
+                  <button type="button" onClick={() => goToTab('comments')} style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: '0.78rem', cursor: 'pointer', padding: 0 }}>
                     start the conversation
                   </button>.
                 </p>
@@ -849,7 +864,7 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
                     <button
                       key={comment.id}
                       type="button"
-                      onClick={() => setActiveTab('comments')}
+                      onClick={() => goToTab('comments')}
                       style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', width: '100%' }}
                     >
                       <div style={{ width: '26px', height: '26px', borderRadius: '8px', background: 'rgba(190,242,100,0.08)', border: '1px solid rgba(190,242,100,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontWeight: 700, fontSize: '0.7rem', flexShrink: 0 }}>

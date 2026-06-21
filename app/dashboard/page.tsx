@@ -217,7 +217,9 @@ export default function Dashboard() {
           </div>
         ) : filteredClaims.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '80px 0' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🔎</div>
+            <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ margin: '0 auto 16px' }}>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+            </svg>
             <p style={{ color: 'var(--text-muted)', marginBottom: '12px' }}>No claims found in this filter.</p>
             <Link href="/claims/new" className="btn-ghost" style={{ textDecoration: 'none' }}>
               Be the first to add one →

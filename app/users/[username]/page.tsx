@@ -110,7 +110,9 @@ export default function PublicProfilePage({ params }: { params: Promise<{ userna
       <div className="page-content" style={{ minHeight: "100vh" }}>
         <Navbar />
         <div style={{ textAlign: "center", padding: "80px 24px", color: "var(--text-muted)" }}>
-          <div style={{ fontSize: "3rem", marginBottom: "16px" }}>👤</div>
+          <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ margin: "0 auto 16px" }}>
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 20.118a7.5 7.5 0 0115 0A17.93 17.93 0 0112 21.75c-2.676 0-5.216-.584-7.5-1.632z" />
+          </svg>
           <p>No user found with username @{username}.</p>
           <Link href="/claims" className="btn-ghost" style={{ textDecoration: "none", marginTop: "16px", display: "inline-flex" }}>← Back to claims</Link>
         </div>

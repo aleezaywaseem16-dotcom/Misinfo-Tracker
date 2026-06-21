@@ -60,7 +60,7 @@ export default function EditClaimPage({ params }: { params: Promise<{ id: string
         estimated_origin_at: toDateInputValue(claim.estimated_origin_at),
       });
 
-      const { data: cats } = await supabase.from("categories").select("id, name").is("deleted_at", null);
+      const { data: cats } = await supabase.from("categories").select("id, name").is("deleted_at", null).order("name");
       setCategories(cats ?? []);
       setLoading(false);
     }

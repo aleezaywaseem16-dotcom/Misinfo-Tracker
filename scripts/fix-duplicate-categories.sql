@@ -12,14 +12,19 @@ begin;
 
 -- 1. For each group of categories whose trimmed, lowercased name matches,
 --    pick one "keeper" row (prefer a non-ALL-CAPS name, then the oldest).
+--
+-- NOTE: plain trim() only strips space characters, not newlines/tabs - it
+-- missed "POLITICS\n" on the first run of this script because of that.
+-- regexp_replace(name, '^\s+|\s+$', '', 'g') strips all whitespace, so this
+-- run catches it.
 create temporary table category_merge_map as
 with ranked as (
   select
     id,
     name,
-    lower(trim(name)) as norm_name,
+    lower(regexp_replace(name, '^\s+|\s+$', '', 'g')) as norm_name,
     row_number() over (
-      partition by lower(trim(name))
+      partition by lower(regexp_replace(name, '^\s+|\s+$', '', 'g'))
       order by (name = upper(name))::int asc, created_at asc
     ) as rn
   from categories
@@ -43,14 +48,17 @@ where c.category_id = m.dupe_id;
 delete from categories
 where id in (select dupe_id from category_merge_map);
 
--- 4. Tidy up any stray surrounding whitespace on the rows that remain.
-update categories set name = trim(name) where name <> trim(name);
+-- 4. Tidy up any stray surrounding whitespace on the rows that remain
+--    (regexp-based, so it catches newlines/tabs too, not just spaces).
+update categories
+set name = regexp_replace(name, '^\s+|\s+$', '', 'g')
+where name <> regexp_replace(name, '^\s+|\s+$', '', 'g');
 
 -- 5. Prevent this from happening again: block future case/whitespace
 --    variants of the same name (only among non-deleted rows).
 drop index if exists categories_name_norm_idx;
 create unique index categories_name_norm_idx
-  on categories (lower(trim(name)))
+  on categories (lower(regexp_replace(name, '^\s+|\s+$', '', 'g')))
   where deleted_at is null;
 
 drop table category_merge_map;

@@ -125,8 +125,12 @@ on conflict (name) do nothing;
 -- both exist as separate rows. Block case/whitespace variants of the same
 -- name going forward (existing dupes need a one-time cleanup — see
 -- scripts/fix-duplicate-categories.sql).
-create unique index if not exists categories_name_norm_idx
-  on categories (lower(trim(name)))
+-- plain trim() only strips spaces, not newlines/tabs - dropped and recreated
+-- with a regex-based trim so a stray "POLITICS\n" style name doesn't slip
+-- past this index the way it slipped past the original trim()-based one.
+drop index if exists categories_name_norm_idx;
+create unique index categories_name_norm_idx
+  on categories (lower(regexp_replace(name, '^\s+|\s+$', '', 'g')))
   where deleted_at is null;
 
 -- ============================================================

@@ -138,7 +138,7 @@ function ClaimsPage() {
   // that's the only part gated here; the page itself stays open to visitors.
   useEffect(() => {
     async function init() {
-      const { data: cats } = await supabase.from("categories").select("id, name");
+      const { data: cats } = await supabase.from("categories").select("id, name").is("deleted_at", null).order("name");
       setCategories(cats ?? []);
       const { data: { user } } = await supabase.auth.getUser();
       if (user) void loadWatchlistSummary();

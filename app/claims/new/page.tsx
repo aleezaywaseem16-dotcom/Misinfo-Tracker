@@ -65,17 +65,17 @@ export default function NewClaimPage() {
       let cats: Category[] = [];
       let tagData: Tag[] = [];
 
-      const categoriesResp = await supabase.from("categories").select("id, name").is("deleted_at", null);
+      const categoriesResp = await supabase.from("categories").select("id, name").is("deleted_at", null).order("name");
       if (categoriesResp.error) {
-        const fallback = await supabase.from("categories").select("id, name");
+        const fallback = await supabase.from("categories").select("id, name").order("name");
         cats = (fallback.error ? [] : (fallback.data as Category[])) ?? [];
       } else {
         cats = (categoriesResp.data as Category[]) ?? [];
       }
 
-      const tagsResp = await supabase.from("tags").select("id, name").is("deleted_at", null);
+      const tagsResp = await supabase.from("tags").select("id, name").is("deleted_at", null).order("name");
       if (tagsResp.error) {
-        const fallback = await supabase.from("tags").select("id, name");
+        const fallback = await supabase.from("tags").select("id, name").order("name");
         tagData = (fallback.error ? [] : (fallback.data as Tag[])) ?? [];
       } else {
         tagData = (tagsResp.data as Tag[]) ?? [];

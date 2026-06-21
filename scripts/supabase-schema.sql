@@ -33,40 +33,61 @@ alter table profiles add column if not exists updated_at timestamptz not null de
 alter table profiles add column if not exists is_banned  boolean not null default false;
 
 -- auto-create profile on signup
+--
+-- IMPORTANT: this runs as an AFTER INSERT trigger on auth.users, inside the
+-- same transaction Supabase Auth uses to create the account. ANY unhandled
+-- exception in here rolls back that whole transaction, and the Auth API
+-- surfaces it to the client as the generic, undiagnosable
+-- "Database error creating new user" / "Database error saving new user".
+-- Everything that can go wrong (username collision, missing roles row,
+-- unexpected null) is therefore wrapped in its own exception handler below
+-- so a profile-creation hiccup can never block the signup itself — it just
+-- gets logged (RAISE WARNING, visible in the project's Postgres logs) and
+-- the account is created without a profile row, which can be backfilled
+-- later. A failed signup cannot be backfilled.
 create or replace function handle_new_user()
-returns trigger language plpgsql security definer as $$
+returns trigger language plpgsql security definer
+set search_path to 'public'
+as $$
 declare
   base_username   text;
   candidate        text;
   suffix           int := 0;
   default_role_id  uuid;
 begin
-  base_username := coalesce(new.raw_user_meta_data->>'preferred_username', split_part(new.email,'@',1));
-  candidate := base_username;
+  begin
+    base_username := coalesce(new.raw_user_meta_data->>'preferred_username', split_part(new.email,'@',1));
+    if base_username is null or trim(base_username) = '' then
+      base_username := 'user';
+    end if;
+    candidate := base_username;
 
-  -- the base username (derived from the email prefix) is not guaranteed unique
-  -- across users, so probe for a free one instead of letting the insert below
-  -- fail with a unique-violation that would roll back the whole signup.
-  while exists (select 1 from profiles where username = candidate) loop
-    suffix := suffix + 1;
-    candidate := base_username || suffix::text;
-  end loop;
+    -- the base username (derived from the email prefix) is not guaranteed unique
+    -- across users, so probe for a free one instead of letting the insert below
+    -- fail with a unique-violation that would roll back the whole signup.
+    while exists (select 1 from profiles where username = candidate) loop
+      suffix := suffix + 1;
+      candidate := base_username || suffix::text;
+    end loop;
 
-  -- role_id is NOT NULL on profiles in some deployments — guarantee a 'user'
-  -- role row exists instead of relying on it having been seeded elsewhere,
-  -- so a missing/empty roles table can never roll back the signup.
-  insert into roles (name) values ('user') on conflict (name) do nothing;
-  select id into default_role_id from roles where name = 'user';
+    -- role_id is NOT NULL on profiles in some deployments — guarantee a 'user'
+    -- role row exists instead of relying on it having been seeded elsewhere,
+    -- so a missing/empty roles table can never roll back the signup.
+    insert into roles (name) values ('user') on conflict (name) do nothing;
+    select id into default_role_id from roles where name = 'user';
 
-  insert into profiles (id, username, display_name, role_id, is_banned)
-  values (
-    new.id,
-    candidate,
-    coalesce(new.raw_user_meta_data->>'full_name', base_username),
-    default_role_id,
-    false
-  )
-  on conflict (id) do nothing;
+    insert into profiles (id, username, display_name, role_id, is_banned)
+    values (
+      new.id,
+      candidate,
+      coalesce(new.raw_user_meta_data->>'full_name', base_username),
+      default_role_id,
+      false
+    )
+    on conflict (id) do nothing;
+  exception when others then
+    raise warning 'handle_new_user: profile creation failed for user % (%): % [%]', new.id, new.email, sqlerrm, sqlstate;
+  end;
   return new;
 end;
 $$;

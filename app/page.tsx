@@ -350,10 +350,6 @@ export default function HomePage() {
             <span className="lp-bracket">[</span>MT<span className="lp-bracket">]</span>
           </span>
           <span className="lp-footer-tag">Detect · Verify · Trust</span>
-          <nav className="lp-footer-links">
-            <Link href="/claims">Claims</Link>
-            <Link href="/login">Sign In</Link>
-          </nav>
         </div>
       </footer>
 
@@ -880,14 +876,6 @@ export default function HomePage() {
           font-size: 0.6rem; letter-spacing: 0.1em;
           color: rgba(255,255,255,0.16);
         }
-        .lp-footer-links { display: flex; gap: 1.5rem; margin-left: auto; }
-        .lp-footer-links a {
-          font-family: 'Space Mono', monospace;
-          font-size: 0.6rem; letter-spacing: 0.09em; text-transform: uppercase;
-          color: rgba(255,255,255,0.2); text-decoration: none; transition: color 0.15s;
-        }
-        .lp-footer-links a:hover { color: #bef264; }
-
         /* ── Tablet (≤960px) ───────────────────────────────────────── */
         @media (max-width: 960px) {
           .lp-hero {

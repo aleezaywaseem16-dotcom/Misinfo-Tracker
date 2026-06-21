@@ -28,7 +28,7 @@ export default function NewClaimPage() {
     category_id: "",
     estimated_origin_at: "",
     sourceUrl: "",
-    sourceType: "link",
+    sourceType: "",
     sourceDocumentName: "",
   });
 
@@ -154,6 +154,7 @@ export default function NewClaimPage() {
     e.preventDefault();
     if (!userId) return;
     if (!form.title.trim()) { setError("Title is required."); return; }
+    if (!form.sourceType) { setError("Please select a source type."); return; }
     if (!form.sourceUrl.trim()) {
       const sourceRequiredMessages: Record<string, string> = {
         image: "A source image is required to submit a claim.",
@@ -300,6 +301,7 @@ export default function NewClaimPage() {
                 onChange={(e) => setForm({ ...form, sourceType: e.target.value, sourceUrl: "", sourceDocumentName: "" })}
                 className="input-field"
               >
+                <option value="" disabled>Select a source type...</option>
                 <option value="link">Link (highest priority)</option>
                 <option value="document">Document</option>
                 <option value="image">Image / Screenshot</option>
@@ -307,8 +309,10 @@ export default function NewClaimPage() {
               </select>
             </div>
 
-            {form.sourceType === "image" ? (
-              <div>
+            {!form.sourceType ? (
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>Choose a source type above to continue.</p>
+            ) : form.sourceType === "image" ? (
+              <div className="animate-fade-in">
                 <label style={labelStyle}>Source Image <span style={{ color: 'var(--accent)' }}>*</span></label>
                 {form.sourceUrl && (
                   <div style={{ marginBottom: 10, maxWidth: 260 }}>
@@ -330,7 +334,7 @@ export default function NewClaimPage() {
                 {sourceImageError && <p style={{ fontSize: 12, color: 'var(--danger)', marginTop: 6 }}>{sourceImageError}</p>}
               </div>
             ) : form.sourceType === "document" ? (
-              <div>
+              <div className="animate-fade-in">
                 <label style={labelStyle}>Source Document <span style={{ color: 'var(--accent)' }}>*</span></label>
                 {form.sourceUrl && (
                   <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -354,7 +358,7 @@ export default function NewClaimPage() {
                 {sourceImageError && <p style={{ fontSize: 12, color: 'var(--danger)', marginTop: 6 }}>{sourceImageError}</p>}
               </div>
             ) : form.sourceType === "text" ? (
-              <div>
+              <div className="animate-fade-in">
                 <label style={labelStyle}>Source Text <span style={{ color: 'var(--accent)' }}>*</span></label>
                 <textarea
                   value={form.sourceUrl}
@@ -368,7 +372,7 @@ export default function NewClaimPage() {
                 <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '5px' }}>{form.sourceUrl.length}/2000</p>
               </div>
             ) : (
-              <div>
+              <div className="animate-fade-in">
                 <label style={labelStyle}>Source URL <span style={{ color: 'var(--accent)' }}>*</span></label>
                 <input
                   type="url"

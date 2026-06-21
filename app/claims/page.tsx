@@ -3,6 +3,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { sortCategoriesOtherLast } from "@/lib/categories";
 import Navbar from "@/components/Navbar";
 import DatePicker from "@/components/DatePicker";
 
@@ -139,7 +140,7 @@ function ClaimsPage() {
   useEffect(() => {
     async function init() {
       const { data: cats } = await supabase.from("categories").select("id, name").is("deleted_at", null).order("name");
-      setCategories(cats ?? []);
+      setCategories(sortCategoriesOtherLast(cats ?? []));
       const { data: { user } } = await supabase.auth.getUser();
       if (user) void loadWatchlistSummary();
     }

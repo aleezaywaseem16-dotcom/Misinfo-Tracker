@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { sortCategoriesOtherLast } from "@/lib/categories";
 import Navbar from "@/components/Navbar";
 
 interface Claim {
@@ -56,7 +57,7 @@ export default function Dashboard() {
 
   async function loadCategories() {
     const { data } = await supabase.from("categories").select("id, name").is("deleted_at", null).order("name");
-    setCategories(data ?? []);
+    setCategories(sortCategoriesOtherLast(data ?? []));
   }
 
   async function loadClaims() {

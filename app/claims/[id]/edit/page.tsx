@@ -3,6 +3,7 @@ import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { sortCategoriesOtherLast } from "@/lib/categories";
 import Navbar from "@/components/Navbar";
 import DatePicker from "@/components/DatePicker";
 
@@ -61,7 +62,7 @@ export default function EditClaimPage({ params }: { params: Promise<{ id: string
       });
 
       const { data: cats } = await supabase.from("categories").select("id, name").is("deleted_at", null).order("name");
-      setCategories(cats ?? []);
+      setCategories(sortCategoriesOtherLast(cats ?? []));
       setLoading(false);
     }
     init();

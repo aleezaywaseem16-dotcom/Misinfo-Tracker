@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { sortCategoriesOtherLast } from "@/lib/categories";
 import Navbar from "@/components/Navbar";
 import Toast from "@/components/Toast";
 import DatePicker from "@/components/DatePicker";
@@ -81,7 +82,7 @@ export default function NewClaimPage() {
         tagData = (tagsResp.data as Tag[]) ?? [];
       }
 
-      setCategories(cats);
+      setCategories(sortCategoriesOtherLast(cats));
       setTags(tagData);
     }
     init();

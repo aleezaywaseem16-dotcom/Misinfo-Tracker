@@ -242,6 +242,18 @@ alter table evidence alter column title drop not null;
 alter table evidence add column if not exists description  text;
 alter table evidence add column if not exists url          text;
 alter table evidence add column if not exists type         text default 'link';
+
+-- "type" was never actually used by any app code - rename it to
+-- source_type (matching claims.source_type) instead of adding a redundant
+-- new column. Mirrors the submitted_by -> created_by rename pattern below.
+do $$ begin
+  if exists (select 1 from information_schema.columns where table_name = 'evidence' and column_name = 'type') then
+    if not exists (select 1 from information_schema.columns where table_name = 'evidence' and column_name = 'source_type') then
+      alter table evidence rename column type to source_type;
+    end if;
+  end if;
+end $$;
+alter table evidence add column if not exists source_type text default 'link';
 alter table evidence add column if not exists supports     boolean;
 alter table evidence add column if not exists deleted_at   timestamptz;
 alter table evidence add column if not exists updated_at   timestamptz not null default now();

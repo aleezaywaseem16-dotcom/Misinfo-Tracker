@@ -8,6 +8,12 @@ import Toast from "@/components/Toast";
 
 interface Claim { id: string; title: string; status: string; }
 
+const SOURCE_REQUIRED_MESSAGES: Record<string, string> = {
+  image: "A source image is required to submit evidence.",
+  document: "A source document is required to submit evidence.",
+  text: "Source text is required to submit evidence.",
+};
+
 export default function AddEvidencePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
@@ -18,12 +24,9 @@ export default function AddEvidencePage({ params }: { params: Promise<{ id: stri
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const [form, setForm] = useState({ title: "", content: "", evidence_url: "", image_url: "", document_url: "" });
-  const [uploadingImage, setUploadingImage] = useState(false);
-  const [imageError, setImageError] = useState("");
-  const [uploadingDocument, setUploadingDocument] = useState(false);
-  const [documentError, setDocumentError] = useState("");
-  const [documentName, setDocumentName] = useState("");
+  const [form, setForm] = useState({ title: "", content: "", evidence_url: "", sourceType: "", sourceFileName: "" });
+  const [uploadingSource, setUploadingSource] = useState(false);
+  const [sourceError, setSourceError] = useState("");
 
   const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
   const ACCEPTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
@@ -31,55 +34,54 @@ export default function AddEvidencePage({ params }: { params: Promise<{ id: stri
   const ACCEPTED_DOCUMENT_TYPES = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"];
 
   async function handleImageFile(file: File) {
-    setImageError("");
+    setSourceError("");
     if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
-      setImageError("Please upload a PNG, JPEG, WEBP, or GIF image.");
+      setSourceError("Please upload a PNG, JPEG, WEBP, or GIF image.");
       return;
     }
     if (file.size > MAX_IMAGE_BYTES) {
-      setImageError("Image must be smaller than 5MB.");
+      setSourceError("Image must be smaller than 5MB.");
       return;
     }
     if (!userId) return;
-    setUploadingImage(true);
+    setUploadingSource(true);
     try {
       const ext = file.name.split(".").pop() || "jpg";
       const path = `${userId}/${id}-${Date.now()}.${ext}`;
       const { error: uploadErr } = await supabase.storage.from("evidence-images").upload(path, file, { cacheControl: "3600", upsert: false });
       if (uploadErr) throw uploadErr;
       const { data: publicData } = supabase.storage.from("evidence-images").getPublicUrl(path);
-      setForm((prev) => ({ ...prev, image_url: publicData.publicUrl }));
+      setForm((prev) => ({ ...prev, evidence_url: publicData.publicUrl }));
     } catch (err) {
-      setImageError(err instanceof Error ? err.message : "Failed to upload image.");
+      setSourceError(err instanceof Error ? err.message : "Failed to upload image.");
     } finally {
-      setUploadingImage(false);
+      setUploadingSource(false);
     }
   }
 
   async function handleDocumentFile(file: File) {
-    setDocumentError("");
+    setSourceError("");
     if (!ACCEPTED_DOCUMENT_TYPES.includes(file.type)) {
-      setDocumentError("Please upload a PDF, Word document, or plain text file.");
+      setSourceError("Please upload a PDF, Word document, or plain text file.");
       return;
     }
     if (file.size > MAX_DOCUMENT_BYTES) {
-      setDocumentError("Document must be smaller than 10MB.");
+      setSourceError("Document must be smaller than 10MB.");
       return;
     }
     if (!userId) return;
-    setUploadingDocument(true);
+    setUploadingSource(true);
     try {
       const ext = file.name.split(".").pop() || "pdf";
       const path = `${userId}/${id}-${Date.now()}.${ext}`;
       const { error: uploadErr } = await supabase.storage.from("source-documents").upload(path, file, { cacheControl: "3600", upsert: false });
       if (uploadErr) throw uploadErr;
       const { data: publicData } = supabase.storage.from("source-documents").getPublicUrl(path);
-      setForm((prev) => ({ ...prev, document_url: publicData.publicUrl }));
-      setDocumentName(file.name);
+      setForm((prev) => ({ ...prev, evidence_url: publicData.publicUrl, sourceFileName: file.name }));
     } catch (err) {
-      setDocumentError(err instanceof Error ? err.message : "Failed to upload document.");
+      setSourceError(err instanceof Error ? err.message : "Failed to upload document.");
     } finally {
-      setUploadingDocument(false);
+      setUploadingSource(false);
     }
   }
 
@@ -103,8 +105,19 @@ export default function AddEvidencePage({ params }: { params: Promise<{ id: stri
     e.preventDefault();
     if (!userId) return;
     if (!form.title.trim() && !form.content.trim()) { setError("Please add a title or description."); return; }
-    if (!form.evidence_url.trim()) { setError("A source URL is required."); return; }
-    try { new URL(form.evidence_url); } catch { setError("Please enter a valid source URL."); return; }
+    if (!form.sourceType) { setError("Please select a source type."); return; }
+    if (!form.evidence_url.trim()) {
+      setError(SOURCE_REQUIRED_MESSAGES[form.sourceType] ?? "A source URL is required.");
+      return;
+    }
+    if (form.sourceType !== "text") {
+      try {
+        new URL(form.evidence_url);
+      } catch {
+        setError("Please enter a valid URL for the source.");
+        return;
+      }
+    }
 
     setSubmitting(true);
     setError("");
@@ -112,7 +125,13 @@ export default function AddEvidencePage({ params }: { params: Promise<{ id: stri
     const res = await fetch('/api/evidence/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ claim_id: id, ...form }),
+      body: JSON.stringify({
+        claim_id: id,
+        title: form.title,
+        content: form.content,
+        evidence_url: form.evidence_url,
+        source_type: form.sourceType,
+      }),
     });
     const payload = await res.json();
     setSubmitting(false);
@@ -200,94 +219,98 @@ export default function AddEvidencePage({ params }: { params: Promise<{ id: stri
             </div>
           </div>
 
-          {/* Image upload */}
-          <div className="card" style={{ padding: "20px" }}>
-            <div className="eyebrow" style={{ marginBottom: 14 }}>Screenshot / Image</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-              {form.image_url && (
-                <div style={{ position: "relative", maxWidth: 260 }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={form.image_url} alt="Evidence preview" style={{ width: "100%", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", display: "block" }} />
-                  <button
-                    type="button"
-                    onClick={() => setForm((prev) => ({ ...prev, image_url: "" }))}
-                    className="btn-secondary"
-                    style={{ marginTop: 8, fontSize: 12, padding: "5px 10px" }}
-                  >
-                    Remove image
-                  </button>
-                </div>
-              )}
-              <div>
+          {/* Source */}
+          <div className="card" style={{ padding: "20px", display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            <div>
+              <div className="eyebrow">Source</div>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '4px' }}>Required — this is what backs the evidence</p>
+            </div>
+
+            <div>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>Source Type</label>
+              <select
+                value={form.sourceType}
+                onChange={(e) => setForm({ ...form, sourceType: e.target.value, evidence_url: "", sourceFileName: "" })}
+                className="input-field"
+              >
+                <option value="" disabled>Select a source type...</option>
+                <option value="link">Link (highest priority)</option>
+                <option value="document">Document</option>
+                <option value="image">Image / Screenshot</option>
+                <option value="text">Text (lowest priority)</option>
+              </select>
+            </div>
+
+            {!form.sourceType ? (
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>Choose a source type above to continue.</p>
+            ) : form.sourceType === "image" ? (
+              <div className="animate-fade-in">
                 <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>
-                  Upload an image <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(optional, max 5MB)</span>
+                  Source Image <span style={{ color: "var(--accent)" }}>*</span>
                 </label>
+                {form.evidence_url && (
+                  <div style={{ marginBottom: 10, maxWidth: 260 }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={form.evidence_url} alt="Evidence preview" style={{ width: "100%", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", display: "block" }} />
+                    <button type="button" onClick={() => setForm({ ...form, evidence_url: "" })} className="btn-secondary" style={{ marginTop: 8, fontSize: 12, padding: "5px 10px" }}>
+                      Remove image
+                    </button>
+                  </div>
+                )}
                 <input
                   type="file"
                   accept="image/png,image/jpeg,image/webp,image/gif"
-                  disabled={uploadingImage}
+                  disabled={uploadingSource}
                   onChange={(e) => { const file = e.target.files?.[0]; if (file) void handleImageFile(file); e.target.value = ""; }}
                   className="input-field"
                 />
-                {uploadingImage && <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>Uploading...</p>}
-                {imageError && <p style={{ fontSize: 12, color: "var(--danger)", marginTop: 6 }}>{imageError}</p>}
+                {uploadingSource && <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>Uploading...</p>}
+                {sourceError && <p style={{ fontSize: 12, color: "var(--danger)", marginTop: 6 }}>{sourceError}</p>}
               </div>
-              <div>
+            ) : form.sourceType === "document" ? (
+              <div className="animate-fade-in">
                 <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>
-                  Or paste an image URL <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(optional)</span>
+                  Source Document <span style={{ color: "var(--accent)" }}>*</span>
                 </label>
-                <input
-                  type="url"
-                  value={form.image_url}
-                  onChange={(e) => setForm({ ...form, image_url: e.target.value })}
-                  placeholder="https://i.imgur.com/..."
-                  className="input-field"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Document upload */}
-          <div className="card" style={{ padding: "20px" }}>
-            <div className="eyebrow" style={{ marginBottom: 14 }}>Document</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-              {form.document_url && (
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <a href={form.document_url} target="_blank" rel="noreferrer" style={{ color: "var(--accent)", fontSize: 13 }}>
-                    {documentName || "View uploaded document"}
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => { setForm((prev) => ({ ...prev, document_url: "" })); setDocumentName(""); }}
-                    className="btn-secondary"
-                    style={{ fontSize: 12, padding: "5px 10px" }}
-                  >
-                    Remove document
-                  </button>
-                </div>
-              )}
-              <div>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>
-                  Upload a document <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(optional, PDF/Word/text, max 10MB)</span>
-                </label>
+                {form.evidence_url && (
+                  <div style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 10 }}>
+                    <a href={form.evidence_url} target="_blank" rel="noreferrer" style={{ color: "var(--accent)", fontSize: 13 }}>
+                      {form.sourceFileName || "View uploaded document"}
+                    </a>
+                    <button type="button" onClick={() => setForm({ ...form, evidence_url: "", sourceFileName: "" })} className="btn-secondary" style={{ fontSize: 12, padding: "5px 10px" }}>
+                      Remove document
+                    </button>
+                  </div>
+                )}
                 <input
                   type="file"
                   accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
-                  disabled={uploadingDocument}
+                  disabled={uploadingSource}
                   onChange={(e) => { const file = e.target.files?.[0]; if (file) void handleDocumentFile(file); e.target.value = ""; }}
                   className="input-field"
                 />
-                {uploadingDocument && <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>Uploading...</p>}
-                {documentError && <p style={{ fontSize: 12, color: "var(--danger)", marginTop: 6 }}>{documentError}</p>}
+                <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '5px' }}>PDF, Word, or plain text — up to 10MB.</p>
+                {uploadingSource && <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>Uploading...</p>}
+                {sourceError && <p style={{ fontSize: 12, color: "var(--danger)", marginTop: 6 }}>{sourceError}</p>}
               </div>
-            </div>
-          </div>
-
-          {/* Source */}
-          <div className="card" style={{ padding: "20px" }}>
-            <div className="eyebrow" style={{ marginBottom: 14 }}>Source</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-              <div>
+            ) : form.sourceType === "text" ? (
+              <div className="animate-fade-in">
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>
+                  Source Text <span style={{ color: "var(--accent)" }}>*</span>
+                </label>
+                <textarea
+                  value={form.evidence_url}
+                  onChange={(e) => setForm({ ...form, evidence_url: e.target.value })}
+                  placeholder="Paste or describe the source content..."
+                  rows={4}
+                  className="input-field"
+                  style={{ resize: 'none' }}
+                  maxLength={2000}
+                />
+                <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '5px' }}>{form.evidence_url.length}/2000</p>
+              </div>
+            ) : (
+              <div className="animate-fade-in">
                 <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>
                   Source URL <span style={{ color: "var(--accent)" }}>*</span>
                 </label>
@@ -299,7 +322,7 @@ export default function AddEvidencePage({ params }: { params: Promise<{ id: stri
                   className="input-field"
                 />
               </div>
-            </div>
+            )}
           </div>
 
           {error && (
@@ -312,7 +335,7 @@ export default function AddEvidencePage({ params }: { params: Promise<{ id: stri
             <Link href={`/claims/${id}`} className="btn-secondary" style={{ flex: 1, textDecoration: "none", justifyContent: "center" }}>
               Cancel
             </Link>
-            <button type="submit" disabled={submitting || uploadingImage || uploadingDocument} className="btn-primary" style={{ flex: 1, justifyContent: "center" }}>
+            <button type="submit" disabled={submitting || uploadingSource} className="btn-primary" style={{ flex: 1, justifyContent: "center" }}>
               {submitting ? "Submitting..." : "Submit Evidence"}
             </button>
           </div>

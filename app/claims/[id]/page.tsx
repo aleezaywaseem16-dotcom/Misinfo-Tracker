@@ -24,6 +24,7 @@ interface Evidence {
   title: string | null;
   content: string | null;
   evidence_url: string | null;
+  source_type: string | null;
   image_url: string | null;
   document_url: string | null;
   created_at: string;
@@ -132,7 +133,7 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
 
   const loadEvidence = useCallback(async () => {
     const { data } = await supabase.from("evidence")
-      .select(`id, title, content, evidence_url, image_url, document_url, created_at, profiles!evidence_created_by_fkey ( display_name, username )`)
+      .select(`id, title, content, evidence_url, source_type, image_url, document_url, created_at, profiles!evidence_created_by_fkey ( display_name, username )`)
       .eq("claim_id", id).is("deleted_at", null).order("created_at", { ascending: false });
     setEvidence((data as unknown as Evidence[]) ?? []);
   }, [id]);
@@ -656,6 +657,10 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
                         )}
                       </div>
                       {item.title && <h3 style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '1rem', marginBottom: '6px' }}>{item.title}</h3>}
+
+                      {/* legacy rows from before evidence had a single source_type-driven
+                          source field — image_url/document_url are no longer written to
+                          by new submissions, but old rows can still have them set. */}
                       {item.image_url && (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={item.image_url} alt={item.title ?? 'Evidence image'} style={{ maxWidth: '100%', maxHeight: 320, borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', display: 'block', marginBottom: '10px' }} />
@@ -666,11 +671,29 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
                           View attached document →
                         </a>
                       )}
+
                       {item.content && <p style={{ color: 'var(--text-secondary)', lineHeight: 1.75 }}>{item.content}</p>}
+
+                      {/* current source, rendered by source_type — mirrors the claim
+                          detail page's source rendering exactly. */}
                       {item.evidence_url && (
-                        <a href={item.evidence_url} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--accent)', fontSize: '0.85rem', marginTop: '14px' }}>
-                          View source →
-                        </a>
+                        item.source_type === 'image' ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={item.evidence_url} alt={item.title ?? 'Evidence source'} style={{ maxWidth: '100%', maxHeight: 320, borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', display: 'block', marginTop: '10px' }} />
+                        ) : item.source_type === 'document' ? (
+                          <a href={item.evidence_url} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--accent)', fontSize: '0.85rem', marginTop: '14px' }}>
+                            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
+                            View attached document →
+                          </a>
+                        ) : item.source_type === 'text' ? (
+                          <p style={{ color: 'var(--text-secondary)', lineHeight: 1.75, fontSize: '0.9rem', whiteSpace: 'pre-wrap', marginTop: '10px' }}>
+                            {item.evidence_url}
+                          </p>
+                        ) : (
+                          <a href={item.evidence_url} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--accent)', fontSize: '0.85rem', marginTop: '14px' }}>
+                            View source →
+                          </a>
+                        )
                       )}
                     </div>
                   ))}

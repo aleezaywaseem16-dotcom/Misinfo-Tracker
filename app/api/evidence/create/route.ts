@@ -5,9 +5,9 @@ import { sanitizeText, sanitizeUrl, isValidUUID } from "@/lib/sanitize";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { claim_id, platform_id, title, content, evidence_url, image_url } = body as {
+    const { claim_id, platform_id, title, content, evidence_url, image_url, document_url } = body as {
       claim_id: unknown; platform_id: unknown; title: unknown;
-      content: unknown; evidence_url: unknown; image_url: unknown;
+      content: unknown; evidence_url: unknown; image_url: unknown; document_url: unknown;
     };
 
     const supabase = await createServerSupabaseClient();
@@ -28,6 +28,7 @@ export async function POST(req: Request) {
     const safeTitle = typeof title === "string" && title.trim() ? sanitizeText(title.trim()) : null;
     const safeContent = typeof content === "string" && content.trim() ? sanitizeText(content.trim()) : null;
     const safeImageUrl = typeof image_url === "string" && image_url.trim() ? sanitizeUrl(image_url.trim()) : null;
+    const safeDocumentUrl = typeof document_url === "string" && document_url.trim() ? sanitizeUrl(document_url.trim()) : null;
 
     if (!safeTitle && !safeContent) {
       return NextResponse.json({ error: "Please provide a title or description" }, { status: 400 });
@@ -35,7 +36,7 @@ export async function POST(req: Request) {
 
     const { data: evidence, error: insertErr } = await supabase
       .from("evidence")
-      .insert({ claim_id, platform_id: safePlatformId, title: safeTitle, content: safeContent, evidence_url: safeEvidenceUrl, image_url: safeImageUrl, created_by: user.id })
+      .insert({ claim_id, platform_id: safePlatformId, title: safeTitle, content: safeContent, evidence_url: safeEvidenceUrl, image_url: safeImageUrl, document_url: safeDocumentUrl, created_by: user.id })
       .select().single();
 
     if (insertErr) return NextResponse.json({ error: insertErr.message }, { status: 500 });

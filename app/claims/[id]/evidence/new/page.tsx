@@ -18,12 +18,17 @@ export default function AddEvidencePage({ params }: { params: Promise<{ id: stri
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const [form, setForm] = useState({ title: "", content: "", evidence_url: "", image_url: "" });
+  const [form, setForm] = useState({ title: "", content: "", evidence_url: "", image_url: "", document_url: "" });
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageError, setImageError] = useState("");
+  const [uploadingDocument, setUploadingDocument] = useState(false);
+  const [documentError, setDocumentError] = useState("");
+  const [documentName, setDocumentName] = useState("");
 
   const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
   const ACCEPTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+  const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
+  const ACCEPTED_DOCUMENT_TYPES = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"];
 
   async function handleImageFile(file: File) {
     setImageError("");
@@ -48,6 +53,33 @@ export default function AddEvidencePage({ params }: { params: Promise<{ id: stri
       setImageError(err instanceof Error ? err.message : "Failed to upload image.");
     } finally {
       setUploadingImage(false);
+    }
+  }
+
+  async function handleDocumentFile(file: File) {
+    setDocumentError("");
+    if (!ACCEPTED_DOCUMENT_TYPES.includes(file.type)) {
+      setDocumentError("Please upload a PDF, Word document, or plain text file.");
+      return;
+    }
+    if (file.size > MAX_DOCUMENT_BYTES) {
+      setDocumentError("Document must be smaller than 10MB.");
+      return;
+    }
+    if (!userId) return;
+    setUploadingDocument(true);
+    try {
+      const ext = file.name.split(".").pop() || "pdf";
+      const path = `${userId}/${id}-${Date.now()}.${ext}`;
+      const { error: uploadErr } = await supabase.storage.from("source-documents").upload(path, file, { cacheControl: "3600", upsert: false });
+      if (uploadErr) throw uploadErr;
+      const { data: publicData } = supabase.storage.from("source-documents").getPublicUrl(path);
+      setForm((prev) => ({ ...prev, document_url: publicData.publicUrl }));
+      setDocumentName(file.name);
+    } catch (err) {
+      setDocumentError(err instanceof Error ? err.message : "Failed to upload document.");
+    } finally {
+      setUploadingDocument(false);
     }
   }
 
@@ -215,6 +247,42 @@ export default function AddEvidencePage({ params }: { params: Promise<{ id: stri
             </div>
           </div>
 
+          {/* Document upload */}
+          <div className="card" style={{ padding: "20px" }}>
+            <div className="eyebrow" style={{ marginBottom: 14 }}>Document</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+              {form.document_url && (
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <a href={form.document_url} target="_blank" rel="noreferrer" style={{ color: "var(--accent)", fontSize: 13 }}>
+                    {documentName || "View uploaded document"}
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => { setForm((prev) => ({ ...prev, document_url: "" })); setDocumentName(""); }}
+                    className="btn-secondary"
+                    style={{ fontSize: 12, padding: "5px 10px" }}
+                  >
+                    Remove document
+                  </button>
+                </div>
+              )}
+              <div>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>
+                  Upload a document <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(optional, PDF/Word/text, max 10MB)</span>
+                </label>
+                <input
+                  type="file"
+                  accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                  disabled={uploadingDocument}
+                  onChange={(e) => { const file = e.target.files?.[0]; if (file) void handleDocumentFile(file); e.target.value = ""; }}
+                  className="input-field"
+                />
+                {uploadingDocument && <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>Uploading...</p>}
+                {documentError && <p style={{ fontSize: 12, color: "var(--danger)", marginTop: 6 }}>{documentError}</p>}
+              </div>
+            </div>
+          </div>
+
           {/* Source */}
           <div className="card" style={{ padding: "20px" }}>
             <div className="eyebrow" style={{ marginBottom: 14 }}>Source</div>
@@ -244,7 +312,7 @@ export default function AddEvidencePage({ params }: { params: Promise<{ id: stri
             <Link href={`/claims/${id}`} className="btn-secondary" style={{ flex: 1, textDecoration: "none", justifyContent: "center" }}>
               Cancel
             </Link>
-            <button type="submit" disabled={submitting || uploadingImage} className="btn-primary" style={{ flex: 1, justifyContent: "center" }}>
+            <button type="submit" disabled={submitting || uploadingImage || uploadingDocument} className="btn-primary" style={{ flex: 1, justifyContent: "center" }}>
               {submitting ? "Submitting..." : "Submit Evidence"}
             </button>
           </div>

@@ -80,6 +80,7 @@ export default function Navbar() {
   }
 
   async function handleSignOut() {
+    if (!window.confirm("Are you sure you want to log out?")) return;
     await supabase.auth.signOut();
     router.push("/");
   }

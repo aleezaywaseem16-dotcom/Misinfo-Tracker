@@ -248,6 +248,9 @@ alter table evidence add column if not exists updated_at   timestamptz not null 
 alter table evidence add column if not exists content      text;
 alter table evidence add column if not exists evidence_url text;
 alter table evidence add column if not exists image_url    text;
+-- separate from image_url so a document attachment doesn't get rendered as
+-- an <img> tag (display logic branches on which of these two is set).
+alter table evidence add column if not exists document_url text;
 alter table evidence add column if not exists platform_id  uuid references platforms(id) on delete set null;
 
 do $$ begin

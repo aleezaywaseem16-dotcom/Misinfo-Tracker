@@ -235,8 +235,8 @@ export default function HomePage() {
         <div className="lp-sec-hd">
           <span className="lp-sec-num">01</span>
           <div>
-            <span className="lp-sec-eye">Investigation Board</span>
-            <h2 className="lp-sec-title">Claims Under Review</h2>
+            <span className="lp-sec-eye">Activity Feed</span>
+            <h2 className="lp-sec-title">Recently Submitted Claims</h2>
           </div>
           <Link href="/claims" className="lp-sec-link">View all →</Link>
         </div>
@@ -246,7 +246,7 @@ export default function HomePage() {
             <span>CLAIM ID</span>
             <span>TITLE</span>
             <span>STATUS</span>
-            <span className="lp-hide-sm">AGE</span>
+            <span className="lp-hide-sm">SUBMITTED</span>
           </div>
           {loading
             ? [...Array(5)].map((_, i) => (

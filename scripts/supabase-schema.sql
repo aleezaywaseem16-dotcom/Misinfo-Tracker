@@ -573,6 +573,63 @@ $$;
 
 grant execute on function update_claim(uuid, text, text, uuid, text, timestamptz) to authenticated;
 
+-- Deleting a claim (admin/moderator, or the claim's own creator) - same
+-- security-definer approach as soft_delete_comment/update_claim, for the
+-- same reason: the declarative DELETE policy ("claims mod delete") is not
+-- independently verified to work reliably in this database's history of
+-- overlapping policy sets.
+create or replace function soft_delete_claim(p_claim_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path to 'public'
+as $$
+declare
+  claim_owner uuid;
+begin
+  select created_by into claim_owner from claims where id = p_claim_id and deleted_at is null;
+  if claim_owner is null then
+    return false;
+  end if;
+
+  if auth.uid() is null or (auth.uid() != claim_owner and current_user_role() not in ('admin','moderator')) then
+    raise exception 'not authorized to delete this claim';
+  end if;
+
+  update claims set deleted_at = now() where id = p_claim_id;
+  return true;
+end;
+$$;
+
+grant execute on function soft_delete_claim(uuid) to authenticated;
+
+-- Deleting an evidence item (admin/moderator, or the item's own creator) -
+-- same security-definer approach as the functions above.
+create or replace function soft_delete_evidence(p_evidence_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path to 'public'
+as $$
+declare
+  evidence_owner uuid;
+begin
+  select created_by into evidence_owner from evidence where id = p_evidence_id and deleted_at is null;
+  if evidence_owner is null then
+    return false;
+  end if;
+
+  if auth.uid() is null or (auth.uid() != evidence_owner and current_user_role() not in ('admin','moderator')) then
+    raise exception 'not authorized to delete this evidence item';
+  end if;
+
+  update evidence set deleted_at = now() where id = p_evidence_id;
+  return true;
+end;
+$$;
+
+grant execute on function soft_delete_evidence(uuid) to authenticated;
+
 -- ── votes ────────────────────────────────────────────────────
 drop policy if exists "votes public read" on claim_votes;
 drop policy if exists "votes auth upsert" on claim_votes;

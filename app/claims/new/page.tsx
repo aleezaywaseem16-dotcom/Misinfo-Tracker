@@ -29,6 +29,7 @@ export default function NewClaimPage() {
     estimated_origin_at: "",
     sourceUrl: "",
     sourceType: "link",
+    sourceDocumentName: "",
   });
 
   useEffect(() => {
@@ -94,6 +95,8 @@ export default function NewClaimPage() {
 
   const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
   const ACCEPTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+  const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
+  const ACCEPTED_DOCUMENT_TYPES = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"];
 
   async function handleSourceImageFile(file: File) {
     setSourceImageError("");
@@ -121,19 +124,52 @@ export default function NewClaimPage() {
     }
   }
 
+  async function handleSourceDocumentFile(file: File) {
+    setSourceImageError("");
+    if (!ACCEPTED_DOCUMENT_TYPES.includes(file.type)) {
+      setSourceImageError("Please upload a PDF, Word document, or plain text file.");
+      return;
+    }
+    if (file.size > MAX_DOCUMENT_BYTES) {
+      setSourceImageError("Document must be smaller than 10MB.");
+      return;
+    }
+    if (!userId) return;
+    setUploadingSourceImage(true);
+    try {
+      const ext = file.name.split(".").pop() || "pdf";
+      const path = `${userId}/claim-source-${Date.now()}.${ext}`;
+      const { error: uploadErr } = await supabase.storage.from("source-documents").upload(path, file, { cacheControl: "3600", upsert: false });
+      if (uploadErr) throw uploadErr;
+      const { data: publicData } = supabase.storage.from("source-documents").getPublicUrl(path);
+      setForm((prev) => ({ ...prev, sourceUrl: publicData.publicUrl, sourceDocumentName: file.name }));
+    } catch (err) {
+      setSourceImageError(err instanceof Error ? err.message : "Failed to upload document.");
+    } finally {
+      setUploadingSourceImage(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!userId) return;
     if (!form.title.trim()) { setError("Title is required."); return; }
     if (!form.sourceUrl.trim()) {
-      setError(form.sourceType === "image" ? "A source image is required to submit a claim." : "A source URL is required to submit a claim.");
+      const sourceRequiredMessages: Record<string, string> = {
+        image: "A source image is required to submit a claim.",
+        document: "A source document is required to submit a claim.",
+        text: "Source text is required to submit a claim.",
+      };
+      setError(sourceRequiredMessages[form.sourceType] ?? "A source URL is required to submit a claim.");
       return;
     }
-    try {
-      new URL(form.sourceUrl);
-    } catch {
-      setError("Please enter a valid URL for the source.");
-      return;
+    if (form.sourceType !== "text") {
+      try {
+        new URL(form.sourceUrl);
+      } catch {
+        setError("Please enter a valid URL for the source.");
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -261,7 +297,7 @@ export default function NewClaimPage() {
               <label style={labelStyle}>Source Type</label>
               <select
                 value={form.sourceType}
-                onChange={(e) => setForm({ ...form, sourceType: e.target.value, sourceUrl: "" })}
+                onChange={(e) => setForm({ ...form, sourceType: e.target.value, sourceUrl: "", sourceDocumentName: "" })}
                 className="input-field"
               >
                 <option value="link">Link (highest priority)</option>
@@ -292,6 +328,44 @@ export default function NewClaimPage() {
                 />
                 {uploadingSourceImage && <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>Uploading...</p>}
                 {sourceImageError && <p style={{ fontSize: 12, color: 'var(--danger)', marginTop: 6 }}>{sourceImageError}</p>}
+              </div>
+            ) : form.sourceType === "document" ? (
+              <div>
+                <label style={labelStyle}>Source Document <span style={{ color: 'var(--accent)' }}>*</span></label>
+                {form.sourceUrl && (
+                  <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <a href={form.sourceUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', fontSize: 13 }}>
+                      {form.sourceDocumentName || 'View uploaded document'}
+                    </a>
+                    <button type="button" onClick={() => setForm({ ...form, sourceUrl: "", sourceDocumentName: "" })} className="btn-secondary" style={{ fontSize: 12, padding: '5px 10px' }}>
+                      Remove document
+                    </button>
+                  </div>
+                )}
+                <input
+                  type="file"
+                  accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                  disabled={uploadingSourceImage}
+                  onChange={(e) => { const file = e.target.files?.[0]; if (file) void handleSourceDocumentFile(file); e.target.value = ""; }}
+                  className="input-field"
+                />
+                <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '5px' }}>PDF, Word, or plain text — up to 10MB.</p>
+                {uploadingSourceImage && <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>Uploading...</p>}
+                {sourceImageError && <p style={{ fontSize: 12, color: 'var(--danger)', marginTop: 6 }}>{sourceImageError}</p>}
+              </div>
+            ) : form.sourceType === "text" ? (
+              <div>
+                <label style={labelStyle}>Source Text <span style={{ color: 'var(--accent)' }}>*</span></label>
+                <textarea
+                  value={form.sourceUrl}
+                  onChange={(e) => setForm({ ...form, sourceUrl: e.target.value })}
+                  placeholder="Paste or describe the source content..."
+                  rows={4}
+                  className="input-field"
+                  style={{ resize: 'none' }}
+                  maxLength={2000}
+                />
+                <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '5px' }}>{form.sourceUrl.length}/2000</p>
               </div>
             ) : (
               <div>

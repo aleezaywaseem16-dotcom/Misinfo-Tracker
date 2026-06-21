@@ -21,20 +21,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Title is required" }, { status: 400 });
     }
     if (typeof sourceUrl !== "string" || !sourceUrl.trim()) {
-      return NextResponse.json({ error: "Source URL is required" }, { status: 400 });
+      return NextResponse.json({ error: "Source is required" }, { status: 400 });
     }
 
     const safeTitle = sanitizeText(title.trim());
     const safeDescription = typeof description === "string" && description.trim() ? sanitizeText(description.trim()) : null;
-    const safeSource = sanitizeUrl(sourceUrl.trim());
-
-    if (!safeSource) return NextResponse.json({ error: "Source URL must be a valid http/https URL" }, { status: 400 });
 
     const safeVisibility = typeof visibility === "string" && (VALID_VISIBILITIES as readonly string[]).includes(visibility)
       ? (visibility as "public" | "private") : "public";
     const safeSourceType = typeof sourceType === "string" && (VALID_SOURCE_TYPES as readonly string[]).includes(sourceType)
       ? (sourceType as (typeof VALID_SOURCE_TYPES)[number]) : "link";
     const safeCategoryId = typeof category_id === "string" && isValidUUID(category_id) ? category_id : null;
+
+    // "text" sources are typed content, not a link — every other type
+    // (link/document/image) is a real URL, validated as such.
+    const safeSource = safeSourceType === "text" ? sanitizeText(sourceUrl.trim()) : sanitizeUrl(sourceUrl.trim());
+    if (!safeSource) {
+      return NextResponse.json(
+        { error: safeSourceType === "text" ? "Source text cannot be empty" : "Source must be a valid http/https URL" },
+        { status: 400 }
+      );
+    }
 
     let safeOriginAt: string | null = null;
     if (typeof estimated_origin_at === "string" && estimated_origin_at) {

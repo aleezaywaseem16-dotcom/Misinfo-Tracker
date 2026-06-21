@@ -707,6 +707,28 @@ create policy "evidence images own delete" on storage.objects for delete
   using (bucket_id = 'evidence-images' and owner = auth.uid());
 
 -- ============================================================
+-- STORAGE — source documents (claim source_type = 'document')
+-- ============================================================
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('source-documents', 'source-documents', true, 10485760, array['application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','text/plain'])
+on conflict (id) do nothing;
+
+update storage.buckets
+  set file_size_limit = 10485760,
+      allowed_mime_types = array['application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','text/plain']
+  where id = 'source-documents';
+
+drop policy if exists "source documents public read" on storage.objects;
+drop policy if exists "source documents auth upload" on storage.objects;
+drop policy if exists "source documents own delete"  on storage.objects;
+create policy "source documents public read" on storage.objects for select
+  using (bucket_id = 'source-documents');
+create policy "source documents auth upload" on storage.objects for insert
+  with check (bucket_id = 'source-documents' and auth.uid() is not null);
+create policy "source documents own delete" on storage.objects for delete
+  using (bucket_id = 'source-documents' and owner = auth.uid());
+
+-- ============================================================
 -- STORAGE — avatars
 -- ============================================================
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

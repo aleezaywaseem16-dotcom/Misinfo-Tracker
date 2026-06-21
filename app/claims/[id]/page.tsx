@@ -455,6 +455,10 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
                   {claim.source_type === 'image' ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={claim.source_url} alt="Claim source" style={{ maxWidth: '100%', maxHeight: 360, borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', display: 'block' }} />
+                  ) : claim.source_type === 'text' ? (
+                    <p style={{ color: 'var(--text-secondary)', lineHeight: 1.75, fontSize: '0.9rem', whiteSpace: 'pre-wrap' }}>
+                      {claim.source_url}
+                    </p>
                   ) : (
                     <a href={claim.source_url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                       View source →

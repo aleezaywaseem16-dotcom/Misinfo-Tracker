@@ -60,7 +60,13 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
+  // auth/callback is excluded: it runs the PKCE code exchange client-side,
+  // reading the verifier cookie that signInWithOtp wrote in the browser.
+  // Running this middleware's supabase.auth.getUser() on that same request
+  // (before the page ever loads) can clear that cookie ahead of the
+  // exchange, since there's no session yet to refresh — causing
+  // "PKCE code verifier not found in storage" even in the same browser.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|auth/callback|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

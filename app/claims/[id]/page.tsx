@@ -635,16 +635,11 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
                   ) : evidence.map((item, index) => (
                     <div key={item.id} className="evidence-card" style={{ animationDelay: `${index * 0.04}s` }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
-                        {item.profiles && (
-                          <Link href={`/users/${item.profiles.username}`} style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.16em', color: 'var(--accent)', background: 'rgba(190,242,100,0.08)', borderRadius: '999px', padding: '2px 12px', textDecoration: 'none' }}>
-                            @{item.profiles.display_name}
-                          </Link>
-                        )}
                         <span className="mono" title={new Date(item.created_at).toLocaleString()}>{timeAgo(item.created_at)}</span>
                         {item.profiles?.username ? (
-                          <Link href={`/users/${item.profiles.username}`} className="mono" style={{ marginLeft: 'auto' }}>@{item.profiles.username}</Link>
+                          <Link href={`/users/${item.profiles.username}`} className="mono" style={{ marginLeft: 'auto' }}>{item.profiles.username}</Link>
                         ) : (
-                          <span className="mono" style={{ marginLeft: 'auto' }}>@source</span>
+                          <span className="mono" style={{ marginLeft: 'auto' }}>source</span>
                         )}
                       </div>
                       {item.title && <h3 style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '1rem', marginBottom: '6px' }}>{item.title}</h3>}

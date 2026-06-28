@@ -1,3 +1,7 @@
+export function formatCategoryName(name: string): string {
+  return name.trim().replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+}
+
 export function sortCategoriesOtherLast<T extends { name: string }>(categories: T[]): T[] {
   return [...categories].sort((a, b) => {
     const aOther = a.name.trim().toLowerCase() === "other";

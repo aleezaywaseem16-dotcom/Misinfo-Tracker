@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import { sortCategoriesOtherLast } from "@/lib/categories";
+import { sortCategoriesOtherLast, formatCategoryName } from "@/lib/categories";
 import Navbar from "@/components/Navbar";
 import Toast from "@/components/Toast";
 import DatePicker from "@/components/DatePicker";
@@ -260,7 +260,7 @@ export default function NewClaimPage() {
                 >
                   <option value="">Select category</option>
                   {categories.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
+                    <option key={c.id} value={c.id}>{formatCategoryName(c.name)}</option>
                   ))}
                 </select>
               </div>

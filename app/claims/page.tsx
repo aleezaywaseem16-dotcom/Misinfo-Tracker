@@ -3,7 +3,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { sortCategoriesOtherLast } from "@/lib/categories";
+import { sortCategoriesOtherLast, formatCategoryName } from "@/lib/categories";
 import Navbar from "@/components/Navbar";
 import DatePicker from "@/components/DatePicker";
 
@@ -224,7 +224,7 @@ function ClaimsPage() {
             </div>
             <select value={categoryFilter} onChange={(e) => updateCategoryFilter(e.target.value)} className="input-field select w-full sm:w-auto" style={{ minWidth: 140 }}>
               <option value="all">All categories</option>
-              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {categories.map((c) => <option key={c.id} value={c.id}>{formatCategoryName(c.name)}</option>)}
             </select>
             <select value={sortBy} onChange={(e) => updateSortBy(e.target.value)} className="input-field w-full sm:w-auto" style={{ minWidth: 130 }}>
               <option value="newest">Newest first</option>

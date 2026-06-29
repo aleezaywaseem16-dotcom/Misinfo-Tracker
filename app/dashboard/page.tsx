@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { sortCategoriesOtherLast } from "@/lib/categories";
 import Navbar from "@/components/Navbar";
+import Toast from "@/components/Toast";
 
 interface Claim {
   id: string;
@@ -23,6 +24,13 @@ interface Stats {
   debunked: number;
   investigating: number;
   confirmed: number;
+}
+
+interface TrendingClaim {
+  id: string;
+  title: string;
+  status: string;
+  voteCount: number;
 }
 
 function useCountUp(target: number, duration: number, start: boolean) {
@@ -78,6 +86,12 @@ export default function Dashboard() {
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
   const [categoryFilter, setCategoryFilter] = useState("all");
 
+  const [trending, setTrending] = useState<TrendingClaim[]>([]);
+  const [realtimeStatus, setRealtimeStatus] = useState<'connecting' | 'live' | 'offline'>('connecting');
+  const [toastMsg, setToastMsg] = useState('');
+  const [toastKey, setToastKey] = useState(0);
+  const [newClaimIds, setNewClaimIds] = useState<Set<string>>(new Set());
+
   const animStarted = !loading;
   const c0 = useCountUp(stats.totalClaims,   1500, animStarted);
   const c1 = useCountUp(stats.investigating,  1500, animStarted);
@@ -122,15 +136,67 @@ export default function Dashboard() {
     }
   }
 
+  async function loadTrending() {
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: recent } = await supabase
+      .from('claims')
+      .select('id, title, status')
+      .eq('visibility', 'public')
+      .is('deleted_at', null)
+      .gte('created_at', since)
+      .limit(30);
+    if (!recent?.length) return;
+    const ids = recent.map((c) => c.id);
+    const { data: votes } = await supabase.from('claim_votes').select('claim_id').in('claim_id', ids);
+    const tally: Record<string, number> = {};
+    for (const v of votes ?? []) tally[v.claim_id] = (tally[v.claim_id] ?? 0) + 1;
+    const top3 = [...recent]
+      .map((c) => ({ ...c, voteCount: tally[c.id] ?? 0 }))
+      .sort((a, b) => b.voteCount - a.voteCount)
+      .slice(0, 3);
+    setTrending(top3);
+  }
+
   useEffect(() => {
     async function init() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { router.push("/login"); return; }
-      await Promise.all([loadClaims(), loadStats(), loadWatchlist(), loadCategories()]);
+      await Promise.all([loadClaims(), loadStats(), loadWatchlist(), loadCategories(), loadTrending()]);
       setLoading(false);
     }
     init();
   }, [router]);
+
+  useEffect(() => {
+    const channel = supabase.channel('dashboard-claims')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'claims' }, async (payload) => {
+        const row = payload.new as { id: string; visibility: string };
+        if (row.visibility !== 'public') return;
+        const { data } = await supabase
+          .from('claims')
+          .select(`id, title, status, visibility, estimated_origin_at, created_at, category_id,
+            profiles!claims_created_by_fkey ( display_name, username ), categories ( name )`)
+          .eq('id', row.id).single();
+        if (data) {
+          setClaims((prev) => [data as unknown as Claim, ...prev.slice(0, 19)]);
+          setNewClaimIds((prev) => new Set([...prev, row.id]));
+          setTimeout(() => setNewClaimIds((prev) => { const s = new Set(prev); s.delete(row.id); return s; }), 600);
+          setToastMsg('New claim added'); setToastKey((k) => k + 1);
+          loadStats();
+        }
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'claims' }, (payload) => {
+        const updated = payload.new as { id: string; status: string };
+        setClaims((prev) => prev.map((c) => c.id === updated.id ? { ...c, status: updated.status } : c));
+        setToastMsg('Claim status updated'); setToastKey((k) => k + 1);
+        loadStats();
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') setRealtimeStatus('live');
+        else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') setRealtimeStatus('offline');
+      });
+    return () => { supabase.removeChannel(channel); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const watchlistAlertCount = watchlistClaims.filter((id) => claims.some((claim) => claim.id === id && ["investigating", "confirmed", "disputed"].includes(claim.status))).length;
 
@@ -162,9 +228,14 @@ export default function Dashboard() {
 
         {/* Hero header */}
         <div className="animate-fade-up" style={{ marginBottom: '40px' }}>
-          <div className="hero-badge" style={{ marginBottom: '16px' }}>
-            <span className="live-dot" />
-            Live Tracking Dashboard
+          <div className="hero-badge" style={{
+            marginBottom: '16px',
+            borderColor: realtimeStatus === 'offline' ? 'rgba(248,113,113,0.4)' : 'var(--accent-border)',
+            background: realtimeStatus === 'offline' ? 'rgba(248,113,113,0.08)' : 'var(--accent-dim)',
+            color: realtimeStatus === 'offline' ? 'var(--danger)' : 'var(--accent)',
+          }}>
+            <span className="live-dot" style={{ background: realtimeStatus === 'offline' ? 'var(--danger)' : 'var(--accent)', animationPlayState: realtimeStatus === 'connecting' ? 'paused' : 'running' }} />
+            {realtimeStatus === 'offline' ? 'OFFLINE' : 'LIVE'} · Tracking Dashboard
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '24px', flexWrap: 'wrap' }}>
             <div>
@@ -214,6 +285,42 @@ export default function Dashboard() {
           ))}
         </div>
 
+        {/* Trending Now */}
+        {trending.length > 0 && (
+          <div style={{ marginBottom: '32px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+              <span style={{ fontSize: '0.6rem', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.18em', color: 'var(--accent)' }}>Trending Now</span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-disabled)', fontFamily: 'var(--font-mono)' }}>· last 7 days</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' }}>
+              {trending.map((claim, i) => (
+                <Link key={claim.id} href={`/claims/${claim.id}`} className="trending-card">
+                  <span style={{ fontSize: '1.6rem', fontWeight: 900, fontFamily: 'var(--font-display)', color: 'var(--accent)', lineHeight: 1, letterSpacing: '-0.04em', flexShrink: 0 }}>
+                    #{i + 1}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: '6px' }}>
+                      {claim.title}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span className={`status-pill status-${claim.status}`} style={{ fontSize: '0.6rem' }}>
+                        <span className="status-dot" />{claim.status}
+                      </span>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                        <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+                        {claim.voteCount}
+                      </span>
+                    </div>
+                  </div>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, opacity: 0.7 }}>
+                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                  </svg>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Filter chips */}
         <div className="animate-fade-up stagger-5" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', overflowX: 'auto', paddingBottom: '4px' }}>
           <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginRight: '4px', whiteSpace: 'nowrap' }}>Filter</span>
@@ -262,7 +369,7 @@ export default function Dashboard() {
               <Link
                 key={claim.id}
                 href={`/claims/${claim.id}`}
-                className={`card card-clickable animate-fade-up`}
+                className={`card card-clickable animate-fade-up${newClaimIds.has(claim.id) ? ' claim-new' : ''}`}
                 style={{ padding: '18px 22px', textDecoration: 'none', animationDelay: `${i * 0.04}s`, display: 'block' }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
@@ -336,6 +443,7 @@ export default function Dashboard() {
           </>
         )}
       </div>
+      {toastMsg && <Toast key={toastKey} message={toastMsg} />}
     </div>
   );
 }

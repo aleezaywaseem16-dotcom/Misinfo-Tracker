@@ -5,6 +5,23 @@ import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
+interface SearchResult { id: string; title: string; status: string; }
+
+function highlight(text: string, query: string) {
+  if (!query.trim()) return <span>{text}</span>;
+  const idx = text.toLowerCase().indexOf(query.toLowerCase());
+  if (idx === -1) return <span>{text}</span>;
+  return (
+    <span>
+      {text.slice(0, idx)}
+      <mark style={{ background: 'rgba(254,240,138,0.22)', color: '#fef08a', borderRadius: '2px', padding: '0 2px', fontStyle: 'normal' }}>
+        {text.slice(idx, idx + query.length)}
+      </mark>
+      {text.slice(idx + query.length)}
+    </span>
+  );
+}
+
 interface Profile {
   display_name: string;
   username: string;
@@ -20,7 +37,12 @@ export default function Navbar() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const searchWrapRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     async function loadUser(userId: string) {
@@ -63,9 +85,25 @@ export default function Navbar() {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setDropdownOpen(false);
       }
+      if (searchWrapRef.current && !searchWrapRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement).tagName;
+      if (e.key === '/' && tag !== 'INPUT' && tag !== 'TEXTAREA') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+      if (e.key === 'Escape') setShowDropdown(false);
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
   }, []);
 
   // Close mobile menu on route change (adjusting state during render instead of an effect)
@@ -87,9 +125,28 @@ export default function Navbar() {
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
+    setShowDropdown(false);
     if (searchQuery.trim()) {
       router.push(`/claims?q=${encodeURIComponent(searchQuery.trim())}`);
     }
+  }
+
+  function handleSearchInput(value: string) {
+    setSearchQuery(value);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    if (!value.trim()) { setSearchResults([]); setShowDropdown(false); return; }
+    searchTimerRef.current = setTimeout(async () => {
+      const q = value.trim();
+      const { data } = await supabase
+        .from('claims')
+        .select('id, title, status')
+        .or(`title.ilike.%${q}%,description.ilike.%${q}%`)
+        .eq('visibility', 'public')
+        .is('deleted_at', null)
+        .limit(5);
+      setSearchResults((data ?? []) as SearchResult[]);
+      setShowDropdown(true);
+    }, 300);
   }
 
   const navLinks = [
@@ -164,17 +221,53 @@ export default function Navbar() {
 
           {/* Search */}
           <form onSubmit={handleSearch} className="navbar-search">
-            <div style={{ position: 'relative' }}>
-              <svg style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div ref={searchWrapRef} style={{ position: 'relative' }}>
+              <svg style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none', zIndex: 1 }} width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
               <input
+                ref={searchInputRef}
                 type="text"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search claims..."
+                onChange={(e) => handleSearchInput(e.target.value)}
+                onFocus={() => { if (searchResults.length > 0) setShowDropdown(true); }}
+                placeholder="Search claims… or press /"
                 className="input-field navbar-search-input"
               />
+              {showDropdown && (
+                <div className="search-dropdown">
+                  {searchResults.length === 0 ? (
+                    <div style={{ padding: '12px 14px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                      No results —{' '}
+                      <Link href="/claims/new" style={{ color: 'var(--accent)' }} onClick={() => setShowDropdown(false)}>
+                        submit this claim →
+                      </Link>
+                    </div>
+                  ) : (
+                    <>
+                      {searchResults.map((r) => (
+                        <Link
+                          key={r.id}
+                          href={`/claims/${r.id}`}
+                          className="search-hit"
+                          onClick={() => { setShowDropdown(false); setSearchQuery(''); }}
+                        >
+                          <span className={`status-pill status-${r.status}`} style={{ fontSize: '0.6rem', flexShrink: 0 }}>
+                            <span className="status-dot" />
+                            {r.status}
+                          </span>
+                          <span style={{ fontSize: '0.82rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                            {highlight(r.title, searchQuery)}
+                          </span>
+                        </Link>
+                      ))}
+                      <div style={{ padding: '7px 12px', borderTop: '1px solid var(--border)', fontSize: '0.72rem', color: 'var(--text-disabled)', fontFamily: 'var(--font-mono)' }}>
+                        ↵ Enter — view all results
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </form>
 

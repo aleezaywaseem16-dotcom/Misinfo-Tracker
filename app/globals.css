@@ -394,6 +394,57 @@ select.input-field option { background: var(--bg-elevated); color: var(--text-pr
   animation: live-blink 2s ease-in-out infinite;
 }
 
+/* ── New-claim realtime slide-in ───────────────────────────── */
+@keyframes slide-down-in {
+  from { opacity: 0; transform: translateY(-14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.claim-new { animation: slide-down-in 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+
+/* ── Trending cards ────────────────────────────────────────── */
+.trending-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  cursor: pointer;
+}
+.trending-card:hover {
+  border-color: var(--accent-border);
+  background: var(--bg-card-hover);
+  box-shadow: 0 0 14px rgba(190,242,100,0.07);
+}
+
+/* ── Search dropdown ───────────────────────────────────────── */
+.search-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0; right: 0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  z-index: 300;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.45);
+}
+.search-hit {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  text-decoration: none;
+  transition: background 0.1s;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+}
+.search-hit:last-child { border-bottom: none; }
+.search-hit:hover, .search-hit:focus { background: var(--accent-dim); outline: none; }
+
 .stat-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

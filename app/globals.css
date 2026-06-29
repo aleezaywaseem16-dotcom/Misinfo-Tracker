@@ -371,6 +371,29 @@ select.input-field option { background: var(--bg-elevated); color: var(--text-pr
 }
 .stat-card:hover { border-top-color: var(--accent); }
 
+@keyframes stat-card-finish {
+  0%   { border-top-color: var(--glow-color); box-shadow: none; }
+  40%  { box-shadow: 0 0 0 3px var(--glow-color), 0 0 22px 2px var(--glow-color); }
+  100% { box-shadow: none; border-top-color: var(--glow-color); }
+}
+.stat-card-done {
+  animation: stat-card-finish 0.9s ease-out forwards;
+  border-top-color: var(--glow-color) !important;
+}
+
+@keyframes live-blink {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(190,242,100,0.7); }
+  50%       { opacity: 0.55; box-shadow: 0 0 0 5px rgba(190,242,100,0); }
+}
+.live-dot {
+  display: inline-block;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+  animation: live-blink 2s ease-in-out infinite;
+}
+
 .stat-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

@@ -25,6 +25,29 @@ interface Stats {
   confirmed: number;
 }
 
+function useCountUp(target: number, duration: number, start: boolean) {
+  const [value, setValue] = useState(0);
+  const [done, setDone] = useState(false);
+  useEffect(() => {
+    if (!start) return;
+    if (target === 0) { setValue(0); setDone(true); return; }
+    setValue(0);
+    setDone(false);
+    const startTime = performance.now();
+    let rafId: number;
+    function tick(now: number) {
+      const t = Math.min((now - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setValue(Math.round(eased * target));
+      if (t < 1) { rafId = requestAnimationFrame(tick); }
+      else { setValue(target); setDone(true); }
+    }
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, [target, duration, start]);
+  return { value, done };
+}
+
 function timeAgo(dateStr: string) {
   const date = new Date(dateStr);
   const diff = Date.now() - date.getTime();
@@ -54,6 +77,13 @@ export default function Dashboard() {
   const [activeFilter, setActiveFilter] = useState("all");
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
   const [categoryFilter, setCategoryFilter] = useState("all");
+
+  const animStarted = !loading;
+  const c0 = useCountUp(stats.totalClaims,   1500, animStarted);
+  const c1 = useCountUp(stats.investigating,  1500, animStarted);
+  const c2 = useCountUp(stats.confirmed,      1500, animStarted);
+  const c3 = useCountUp(stats.debunked,       1500, animStarted);
+  const counts = [c0, c1, c2, c3];
 
   async function loadCategories() {
     const { data } = await supabase.from("categories").select("id, name").is("deleted_at", null).order("name");
@@ -133,7 +163,7 @@ export default function Dashboard() {
         {/* Hero header */}
         <div className="animate-fade-up" style={{ marginBottom: '40px' }}>
           <div className="hero-badge" style={{ marginBottom: '16px' }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10" opacity="0.3"/><circle cx="12" cy="12" r="4"/></svg>
+            <span className="live-dot" />
             Live Tracking Dashboard
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '24px', flexWrap: 'wrap' }}>
@@ -158,7 +188,7 @@ export default function Dashboard() {
           {statCards.map((card, i) => (
             <div
               key={card.label}
-              className={`stat-card animate-fade-up stagger-${i + 1}`}
+              className={`stat-card animate-fade-up stagger-${i + 1}${counts[i].done ? ' stat-card-done' : ''}`}
               style={{ '--glow-color': card.color } as React.CSSProperties}
             >
               <div style={{
@@ -175,7 +205,7 @@ export default function Dashboard() {
                 {card.icon}
               </div>
               <div className="font-display" style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.03em', lineHeight: 1 }}>
-                {loading ? <div className="skeleton" style={{ width: '48px', height: '32px' }} /> : card.value.toLocaleString()}
+                {loading ? <div className="skeleton" style={{ width: '48px', height: '32px' }} /> : counts[i].value.toLocaleString()}
               </div>
               <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 500, marginTop: '6px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                 {card.label}

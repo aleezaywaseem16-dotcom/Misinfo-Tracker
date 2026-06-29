@@ -493,25 +493,42 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
         {(() => {
           const vc = aiVerdict ? (VERDICT_COLORS[aiVerdict.verdict] ?? '#64748b') : 'var(--border-strong)';
           const vg = aiVerdict ? (VERDICT_GLOWS[aiVerdict.verdict] ?? 'transparent') : 'transparent';
+          const animated = !verdictLoading && !!aiVerdict;
           return (
-            <div style={{
-              marginBottom: '24px', borderRadius: '6px',
-              border: `1px solid ${verdictLoading ? 'var(--border-strong)' : vc}`,
-              boxShadow: (!verdictLoading && aiVerdict) ? `0 0 0 1px ${vc}22, 0 0 32px ${vg}` : 'none',
-              background: 'var(--bg-surface)', overflow: 'hidden',
-              transition: 'box-shadow 0.5s ease, border-color 0.5s ease',
-            }}>
+            <div
+              className={animated ? 'verdict-card-animated' : ''}
+              style={{
+                marginBottom: '24px', borderRadius: '6px',
+                border: `1px solid ${verdictLoading ? 'var(--border-strong)' : vc}`,
+                background: 'var(--bg-surface)', overflow: 'hidden',
+                transition: 'border-color 0.5s ease',
+              }}
+            >
+              {animated && (
+                <style>{`
+                  @keyframes verdict-pulse {
+                    0%, 100% { box-shadow: 0 0 0 1px ${vc}33, 0 0 24px ${vg}; }
+                    50% { box-shadow: 0 0 0 2px ${vc}77, 0 0 56px ${vg.replace('0.18)', '0.42)')}; }
+                  }
+                  .verdict-card-animated { animation: verdict-pulse 3s ease-in-out infinite; }
+                `}</style>
+              )}
               {/* Card header */}
               <div style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '10px 20px',
-                borderBottom: `1px solid ${verdictLoading ? 'var(--border)' : vc + '30'}`,
-                background: (!verdictLoading && aiVerdict) ? vc + '08' : 'transparent',
+                display: 'flex', alignItems: 'center', gap: '10px',
+                padding: '12px 16px',
+                borderBottom: `1px solid ${verdictLoading ? 'var(--border)' : vc + '40'}`,
+                background: 'rgba(0,0,0,0.28)',
               }}>
-                <span style={{ fontSize: '0.6rem', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.18em', color: 'var(--text-muted)' }}>
-                  AI Verdict
+                <span style={{ fontSize: '1rem', fontWeight: 700, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.06em', color: animated ? vc : 'var(--accent)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  ⚡ AI VERDICT
                 </span>
-                <span style={{ fontSize: '0.58rem', fontFamily: 'var(--font-mono)', color: 'var(--text-disabled)', letterSpacing: '0.05em' }}>
+                <span style={{
+                  fontSize: '0.65rem', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em',
+                  color: animated ? vc : 'var(--text-muted)',
+                  border: `1px solid ${animated ? vc + '55' : 'var(--border)'}`,
+                  borderRadius: '4px', padding: '2px 8px',
+                }}>
                   Llama 3.3-70B
                 </span>
               </div>
@@ -551,15 +568,15 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '14px', flexWrap: 'wrap' }}>
                       <span style={{
                         display: 'inline-flex', alignItems: 'center', gap: '7px',
-                        padding: '7px 16px', borderRadius: '4px',
-                        background: vc + '18', border: `1px solid ${vc}50`,
-                        fontFamily: 'var(--font-mono)', fontSize: '0.88rem', fontWeight: 700, letterSpacing: '0.12em', color: vc,
+                        padding: '9px 20px', borderRadius: '4px',
+                        background: vc + '18', border: `1px solid ${vc}55`,
+                        fontFamily: 'var(--font-mono)', fontSize: '1.3rem', fontWeight: 900, letterSpacing: '0.1em', color: vc,
                       }}>
                         <span style={{ width: 7, height: 7, borderRadius: '50%', background: vc, flexShrink: 0 }} />
                         {aiVerdict.verdict}
                       </span>
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                        <span style={{ fontSize: '1.7rem', fontWeight: 800, fontFamily: 'var(--font-display)', color: vc, lineHeight: 1, letterSpacing: '-0.03em' }}>
+                        <span style={{ fontSize: '3rem', fontWeight: 900, fontFamily: 'var(--font-display)', color: vc, lineHeight: 1, letterSpacing: '-0.04em' }}>
                           {aiVerdict.confidence}%
                         </span>
                         <span style={{ fontSize: '0.6rem', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-muted)' }}>

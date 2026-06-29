@@ -31,21 +31,14 @@ export async function POST(request: Request) {
   }
 
   const model = process.env.GROQ_MODEL ?? DEFAULT_MODEL;
-  const systemPrompt = `You are a knowledgeable, conversational AI assistant specializing in misinformation analysis, fact-checking, and media literacy. You can answer:
-- General questions about how misinformation spreads, common patterns, and red flags to watch for
-- Fact-checking methodologies, source evaluation, and evidence credibility
-- Analysis of specific claims when details are provided by the user
-- Platform workflow guidance (watchlists, evidence submission, confidence scores)
-- Media literacy education and critical thinking techniques
+  const systemPrompt = `You are a helpful AI assistant embedded in a misinformation tracking platform. Answer the user's question directly and conversationally in 2–4 paragraphs.
 
-Always provide a helpful, substantive answer. Never reply with "I need more context" or "please provide claim details" — if specific context is missing, give a thorough general educational answer about the topic. Be direct and conversational.
+Topics you cover: how misinformation spreads, fact-checking methods, source credibility, media literacy, recognising propaganda techniques, platform features (watchlists, evidence, confidence scores).
 
-Return ONLY a valid JSON object with exactly these fields:
-{
-  "response": "your full conversational answer here (1-4 paragraphs)",
-  "confidence": null,
-  "sourceUrl": null
-}`;
+Rules:
+- Give a real, substantive answer every single time.
+- If the question is vague or lacks context, answer it as a general educational question on that topic — never ask the user to "provide claim details" or say you "need more context".
+- Be direct, clear, and informative. No filler phrases.`;
 
   const payload = {
     model,
@@ -54,8 +47,7 @@ Return ONLY a valid JSON object with exactly these fields:
       { role: "user", content: message },
     ],
     max_tokens: 700,
-    temperature: 0.65,
-    response_format: { type: "json_object" },
+    temperature: 0.7,
   };
 
   const controller = new AbortController();
@@ -82,20 +74,9 @@ Return ONLY a valid JSON object with exactly these fields:
   }
 
   const data = await response.json().catch(() => ({}));
-  const raw: string = data?.choices?.[0]?.message?.content ?? "";
+  const responseText: string = (data?.choices?.[0]?.message?.content ?? "").trim() || "I couldn't generate a response.";
 
-  let parsed: { response?: string; confidence?: string | number | null; sourceUrl?: string | null } = {};
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    parsed = { response: raw || "I couldn't generate a response." };
-  }
-
-  const responseText = typeof parsed.response === "string" && parsed.response.trim()
-    ? parsed.response.trim()
-    : "I couldn't generate a response.";
-
-  return NextResponse.json({ response: responseText, confidence: parsed.confidence ?? null, sourceUrl: parsed.sourceUrl ?? null });
+  return NextResponse.json({ response: responseText, confidence: null, sourceUrl: null });
 }
 
 export async function GET() {

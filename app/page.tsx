@@ -194,7 +194,6 @@ export default function HomePage() {
                 {feedClaims.map((c, i) => (
                   <div key={`${c.id}-${i}`} className={`lp-feed-row${i === 0 ? ' lp-feed-row-latest' : ''}`}>
                     <div className="lp-feed-row-top">
-                      <span className="lp-feed-id">{c.id.slice(0, 8).toUpperCase()}</span>
                       <span className="lp-feed-t" title={new Date(c.created_at).toLocaleString()}>{timeAgo(c.created_at)}</span>
                     </div>
                     <div className="lp-feed-title">{c.title}</div>
@@ -242,24 +241,21 @@ export default function HomePage() {
         </div>
 
         <div className="lp-table">
-          <div className="lp-table-hd">
-            <span>CLAIM ID</span>
+          <div className="lp-table-hd" style={{ gridTemplateColumns: '1fr 140px 80px' }}>
             <span>TITLE</span>
             <span>STATUS</span>
             <span className="lp-hide-sm">SUBMITTED</span>
           </div>
           {loading
             ? [...Array(5)].map((_, i) => (
-                <div key={i} className="lp-table-row lp-table-skel">
-                  <div className="lp-skel-line" style={{ width: '80px' }} />
+                <div key={i} className="lp-table-row lp-table-skel" style={{ gridTemplateColumns: '1fr 140px 80px' }}>
                   <div className="lp-skel-line" style={{ width: '60%' }} />
                   <div className="lp-skel-line" style={{ width: '70px' }} />
                   <div className="lp-skel-line lp-hide-sm" style={{ width: '40px' }} />
                 </div>
               ))
             : claims.slice(0, 5).map((c) => (
-                <Link key={c.id} href={`/claims/${c.id}`} className="lp-table-row lp-table-row-link">
-                  <span className="lp-td-id">{c.id.slice(0, 8).toUpperCase()}</span>
+                <Link key={c.id} href={`/claims/${c.id}`} className="lp-table-row lp-table-row-link" style={{ gridTemplateColumns: '1fr 140px 80px' }}>
                   <span className="lp-td-title">{c.title}</span>
                   <span className="lp-td-status">
                     <span className="lp-td-dot" style={{ background: S_COLOR[c.status] ?? '#64748b' }} />

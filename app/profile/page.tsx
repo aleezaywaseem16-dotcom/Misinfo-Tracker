@@ -144,13 +144,33 @@ export default function ProfilePage() {
                     : (profile?.display_name?.charAt(0).toUpperCase() ?? 'U')}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label
+                    htmlFor="avatar-upload"
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '8px',
+                      padding: '9px 16px', borderRadius: 'var(--radius-sm)',
+                      border: '1px dashed rgba(0,255,136,0.35)',
+                      cursor: uploadingAvatar ? 'not-allowed' : 'pointer',
+                      fontSize: '0.82rem', color: 'var(--accent)',
+                      opacity: uploadingAvatar ? 0.5 : 1,
+                      background: 'rgba(0,255,136,0.04)',
+                      transition: 'border-color 0.15s, background 0.15s',
+                      userSelect: 'none',
+                    }}
+                  >
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    {uploadingAvatar ? 'Uploading…' : 'Upload photo'}
+                  </label>
                   <input
+                    id="avatar-upload"
                     type="file"
                     accept="image/png,image/jpeg,image/webp,image/gif"
                     disabled={uploadingAvatar}
                     onChange={(e) => { const file = e.target.files?.[0]; if (file) void handleAvatarFile(file); e.target.value = ""; }}
-                    className="input-field"
-                    style={{ fontSize: '0.78rem', padding: '8px' }}
+                    style={{ display: 'none' }}
                   />
                   {profile?.avatar_url && (
                     <button type="button" onClick={handleRemoveAvatar} disabled={uploadingAvatar} className="btn-secondary" style={{ fontSize: '0.75rem', padding: '5px 12px', alignSelf: 'flex-start' }}>
@@ -174,7 +194,7 @@ export default function ProfilePage() {
             </div>
             <div>
               <label style={labelStyle}>Bio</label>
-              <textarea value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} className="input-field" style={{ resize: 'none' }} rows={3} maxLength={300} placeholder="A short bio..." />
+              <textarea value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} className="input-field" style={{ resize: 'none' }} rows={3} maxLength={300} placeholder="Fact-checking researcher and community contributor" />
               <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '5px' }}>{form.bio.length}/300</p>
             </div>
           </div>

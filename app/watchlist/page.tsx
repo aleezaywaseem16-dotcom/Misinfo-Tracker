@@ -176,6 +176,17 @@ export default function WatchlistPage() {
                 </div>
               );
             })}
+            {rows.length > 0 && rows.length < 3 && (
+              <div className="card" style={{ padding: "20px 22px", border: "1px dashed rgba(0,255,136,0.25)", background: "rgba(0,255,136,0.03)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                <div>
+                  <p style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>Track more claims</p>
+                  <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", margin: "4px 0 0" }}>Browse claims and click &ldquo;Add to Watchlist&rdquo; to monitor them here.</p>
+                </div>
+                <Link href="/claims" className="btn-primary" style={{ textDecoration: "none", fontSize: "0.82rem", padding: "8px 18px", flexShrink: 0 }}>
+                  Browse Claims →
+                </Link>
+              </div>
+            )}
           </div>
         )}
       </div>

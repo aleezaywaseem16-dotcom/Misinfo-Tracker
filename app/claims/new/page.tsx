@@ -324,12 +324,31 @@ export default function NewClaimPage() {
                     </button>
                   </div>
                 )}
+                <label
+                  htmlFor="source-image-upload"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '8px',
+                    padding: '9px 16px', borderRadius: 'var(--radius-sm)',
+                    border: '1px dashed rgba(0,255,136,0.35)',
+                    cursor: uploadingSourceImage ? 'not-allowed' : 'pointer',
+                    fontSize: '0.82rem', color: 'var(--accent)',
+                    opacity: uploadingSourceImage ? 0.5 : 1,
+                    background: 'rgba(0,255,136,0.04)', userSelect: 'none',
+                  }}
+                >
+                  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  {uploadingSourceImage ? 'Uploading…' : 'Upload image'}
+                </label>
                 <input
+                  id="source-image-upload"
                   type="file"
                   accept="image/png,image/jpeg,image/webp,image/gif"
                   disabled={uploadingSourceImage}
                   onChange={(e) => { const file = e.target.files?.[0]; if (file) void handleSourceImageFile(file); e.target.value = ""; }}
-                  className="input-field"
+                  style={{ display: 'none' }}
                 />
                 {uploadingSourceImage && <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>Uploading...</p>}
                 {sourceImageError && <p style={{ fontSize: 12, color: 'var(--danger)', marginTop: 6 }}>{sourceImageError}</p>}
@@ -347,12 +366,30 @@ export default function NewClaimPage() {
                     </button>
                   </div>
                 )}
+                <label
+                  htmlFor="source-doc-upload"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '8px',
+                    padding: '9px 16px', borderRadius: 'var(--radius-sm)',
+                    border: '1px dashed rgba(0,255,136,0.35)',
+                    cursor: uploadingSourceImage ? 'not-allowed' : 'pointer',
+                    fontSize: '0.82rem', color: 'var(--accent)',
+                    opacity: uploadingSourceImage ? 0.5 : 1,
+                    background: 'rgba(0,255,136,0.04)', userSelect: 'none',
+                  }}
+                >
+                  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  {uploadingSourceImage ? 'Uploading…' : 'Upload document'}
+                </label>
                 <input
+                  id="source-doc-upload"
                   type="file"
                   accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
                   disabled={uploadingSourceImage}
                   onChange={(e) => { const file = e.target.files?.[0]; if (file) void handleSourceDocumentFile(file); e.target.value = ""; }}
-                  className="input-field"
+                  style={{ display: 'none' }}
                 />
                 <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '5px' }}>PDF, Word, or plain text — up to 10MB.</p>
                 {uploadingSourceImage && <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>Uploading...</p>}
@@ -414,7 +451,7 @@ export default function NewClaimPage() {
             <Link
               href="/claims"
               className="btn-secondary"
-              style={{ textDecoration: 'none', flex: 1, justifyContent: 'center' }}
+              style={{ textDecoration: 'none', flex: 1, justifyContent: 'center', background: 'var(--bg-surface)', border: '1px solid var(--accent-border)', color: 'var(--accent)' }}
             >
               Cancel
             </Link>

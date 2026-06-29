@@ -27,6 +27,7 @@ export default function AdminPage() {
   const [statusError, setStatusError] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState("");
+  const [confirmModal, setConfirmModal] = useState<{ id: string; title: string; type: 'claim' | 'evidence' | 'comment' } | null>(null);
 
   useEffect(() => {
     async function loadAll() {
@@ -78,7 +79,6 @@ export default function AdminPage() {
   }
 
   async function handleDeleteClaim(claimId: string) {
-    if (!window.confirm("Delete this claim? This can't be undone.")) return;
     setDeleteError("");
     setDeletingId(claimId);
     try {
@@ -99,7 +99,6 @@ export default function AdminPage() {
   }
 
   async function handleDeleteEvidence(evidenceId: string) {
-    if (!window.confirm("Delete this evidence item? This can't be undone.")) return;
     setDeleteError("");
     setDeletingId(evidenceId);
     try {
@@ -120,7 +119,6 @@ export default function AdminPage() {
   }
 
   async function handleDeleteComment(commentId: string) {
-    if (!window.confirm("Delete this comment? This can't be undone.")) return;
     setDeleteError("");
     setDeletingId(commentId);
     try {
@@ -226,7 +224,7 @@ export default function AdminPage() {
                   </select>
                   <button
                     type="button"
-                    onClick={() => void handleDeleteClaim(claim.id)}
+                    onClick={() => setConfirmModal({ id: claim.id, title: claim.title, type: 'claim' })}
                     disabled={deletingId === claim.id}
                     className="btn-ghost"
                     style={{ fontSize: '0.72rem', padding: '4px 10px', flexShrink: 0, color: 'var(--danger)', opacity: deletingId === claim.id ? 0.5 : 1 }}
@@ -259,7 +257,7 @@ export default function AdminPage() {
                   </span>
                   <button
                     type="button"
-                    onClick={() => void handleDeleteEvidence(item.id)}
+                    onClick={() => setConfirmModal({ id: item.id, title: item.title ?? item.content ?? 'this evidence item', type: 'evidence' })}
                     disabled={deletingId === item.id}
                     className="btn-ghost"
                     style={{ fontSize: '0.72rem', padding: '4px 10px', flexShrink: 0, color: 'var(--danger)', opacity: deletingId === item.id ? 0.5 : 1 }}
@@ -292,7 +290,7 @@ export default function AdminPage() {
                   </span>
                   <button
                     type="button"
-                    onClick={() => void handleDeleteComment(comment.id)}
+                    onClick={() => setConfirmModal({ id: comment.id, title: comment.content.slice(0, 60) + (comment.content.length > 60 ? '…' : ''), type: 'comment' })}
                     disabled={deletingId === comment.id}
                     className="btn-ghost"
                     style={{ fontSize: '0.72rem', padding: '4px 10px', flexShrink: 0, color: 'var(--danger)', opacity: deletingId === comment.id ? 0.5 : 1 }}
@@ -305,6 +303,52 @@ export default function AdminPage() {
           )}
         </div>
       </div>
+
+      {/* Confirmation modal */}
+      {confirmModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>
+          <div className="card" style={{ maxWidth: 420, width: '90%', padding: '28px 28px 24px', display: 'flex', flexDirection: 'column', gap: '16px', border: '1px solid rgba(248,113,113,0.3)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <svg width="18" height="18" fill="none" stroke="var(--danger)" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+              <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Delete {confirmModal.type}?</h3>
+            </div>
+            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.65, margin: 0 }}>
+              Are you sure you want to delete this {confirmModal.type}?{' '}
+              <span style={{ color: 'var(--text-primary)', fontStyle: 'italic' }}>
+                &ldquo;{confirmModal.title.slice(0, 80)}{confirmModal.title.length > 80 ? '…' : ''}&rdquo;
+              </span>
+              <br />
+              <span style={{ color: 'var(--danger)', fontWeight: 600 }}>This cannot be undone.</span>
+            </p>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                style={{ flex: 1, justifyContent: 'center' }}
+                onClick={() => setConfirmModal(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                style={{ flex: 1, justifyContent: 'center', background: 'var(--danger)', borderColor: 'var(--danger)' }}
+                onClick={async () => {
+                  const { id, type } = confirmModal;
+                  setConfirmModal(null);
+                  if (type === 'claim') await handleDeleteClaim(id);
+                  else if (type === 'evidence') await handleDeleteEvidence(id);
+                  else await handleDeleteComment(id);
+                }}
+              >
+                Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

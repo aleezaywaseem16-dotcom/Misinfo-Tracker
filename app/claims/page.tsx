@@ -54,9 +54,18 @@ function timeAgo(dateStr: string) {
 }
 
 function calculateConfidence(status: string, evidenceCount: number): number {
-  const base: Record<string, number> = { confirmed: 70, investigating: 48, disputed: 38, unverified: 22, debunked: 10, archived: 18 };
-  const evidenceBonus = Math.min(evidenceCount * 5, 25);
-  return Math.min(95, Math.max(5, (base[status] ?? 30) + evidenceBonus));
+  const bonus = Math.min(evidenceCount * 3, 15);
+  if (status === 'debunked' || status === 'confirmed') return Math.min(99, Math.max(75, 75 + Math.min(evidenceCount * 4, 24)));
+  if (status === 'investigating') return Math.min(60, 40 + bonus);
+  if (status === 'unverified') return Math.min(25, 15 + bonus);
+  if (status === 'archived') return 50;
+  return Math.min(55, 30 + bonus); // disputed
+}
+
+function confColor(conf: number): string {
+  if (conf >= 75) return 'var(--verified)';
+  if (conf >= 40) return 'var(--warning)';
+  return 'var(--danger)';
 }
 
 const PAGE_SIZE = 12;
@@ -354,10 +363,10 @@ function ClaimsPage() {
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
                       <div style={{
                         fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700,
-                        color: conf >= 70 ? "var(--danger)" : conf >= 50 ? "var(--warning)" : "var(--text-muted)",
+                        color: confColor(conf),
                         letterSpacing: "0.04em",
                         background: "var(--bg-inset)", padding: "3px 8px",
-                        borderRadius: "var(--radius-xs)", border: "1px solid var(--border)",
+                        borderRadius: "var(--radius-xs)", border: `1px solid ${confColor(conf)}44`,
                       }}>
                         {conf}% CONF
                       </div>

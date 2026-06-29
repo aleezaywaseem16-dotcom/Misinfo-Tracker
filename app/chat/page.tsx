@@ -17,9 +17,9 @@ const initialMessages: ChatMessage[] = [
 ];
 
 const quickPrompts = [
-  "Summarize the latest evidence for a claim.",
-  "Why is this claim considered high risk?",
-  "What should I watch in the watchlist next?",
+  "What are common red flags of misinformation?",
+  "How do I evaluate source credibility?",
+  "What is the best way to fact-check a viral claim?",
 ];
 
 export default function ChatPage() {
@@ -181,7 +181,7 @@ export default function ChatPage() {
               {messages.map((message: ChatMessage, index) => (
                 <div key={`${message.role}-${index}`} className={`message-bubble ${message.role}`}>
                   <span className="message-label">{message.role === "user" ? "You" : "Assistant"}</span>
-                  <p>{message.text}</p>
+                  <p style={{ whiteSpace: "pre-wrap" }}>{message.text}</p>
                   {message.confidence && (
                     <div className="mono" style={{ marginTop: "8px", fontSize: "0.72rem", color: "var(--text-muted)" }}>
                       Confidence: {message.confidence}
@@ -194,38 +194,63 @@ export default function ChatPage() {
                   )}
                 </div>
               ))}
+              {sending && (
+                <div className="message-bubble assistant">
+                  <span className="message-label">Assistant</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "5px", padding: "4px 0" }}>
+                    <span className="typing-dot" />
+                    <span className="typing-dot" style={{ animationDelay: "0.18s" }} />
+                    <span className="typing-dot" style={{ animationDelay: "0.36s" }} />
+                  </div>
+                </div>
+              )}
               <div ref={messagesEndRef} />
             </div>
 
             <form onSubmit={handleSubmit} style={{ marginTop: "18px" }}>
-              <label htmlFor="chat-input" className="sr-only">Ask the assistant</label>
-              <textarea
-                id="chat-input"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSend(input);
-                  }
-                }}
-                rows={4}
-                placeholder="Ask something like: 'Summarize the strongest evidence for the top claim.'"
-                className="input-field"
-                style={{ width: "100%" }}
-                disabled={sending}
-              />
-              <div style={{ marginTop: "12px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "7px" }}>
-                  {quickPrompts.map((prompt) => (
-                    <button key={prompt} type="button" className="filter-chip" onClick={() => handleSend(prompt)} disabled={sending} style={{ fontSize: "0.7rem" }}>
-                      {prompt}
-                    </button>
-                  ))}
+              <div style={{ display: "flex", gap: "10px", alignItems: "flex-end" }}>
+                <div style={{ flex: 1 }}>
+                  <label htmlFor="chat-input" className="sr-only">Ask the assistant</label>
+                  <textarea
+                    id="chat-input"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        if (!sending && input.trim()) handleSend(input);
+                      }
+                    }}
+                    rows={3}
+                    placeholder="Ask anything — e.g. 'What are signs a news story is fabricated?'"
+                    className="input-field"
+                    style={{ width: "100%", resize: "none" }}
+                    disabled={sending}
+                  />
                 </div>
-                <button type="submit" className="btn-primary" disabled={sending || !input.trim()}>
-                  {sending ? "Thinking..." : "Send"}
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={sending || !input.trim()}
+                  style={{ flexShrink: 0, height: "76px", fontSize: "0.9rem", fontWeight: 700, padding: "0 22px", display: "flex", alignItems: "center", gap: "6px" }}
+                >
+                  {sending ? (
+                    <>
+                      <span className="typing-dot" style={{ width: 5, height: 5 }} />
+                      <span className="typing-dot" style={{ width: 5, height: 5, animationDelay: "0.18s" }} />
+                      <span className="typing-dot" style={{ width: 5, height: 5, animationDelay: "0.36s" }} />
+                    </>
+                  ) : (
+                    <>Send <span style={{ fontSize: "1rem" }}>→</span></>
+                  )}
                 </button>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "7px", marginTop: "10px" }}>
+                {quickPrompts.map((prompt) => (
+                  <button key={prompt} type="button" className="filter-chip" onClick={() => handleSend(prompt)} disabled={sending} style={{ fontSize: "0.7rem" }}>
+                    {prompt}
+                  </button>
+                ))}
               </div>
               {error && <p style={{ color: "var(--danger)", marginTop: "10px", fontSize: "0.85rem" }}>{error}</p>}
             </form>

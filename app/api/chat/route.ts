@@ -31,8 +31,21 @@ export async function POST(request: Request) {
   }
 
   const model = process.env.GROQ_MODEL ?? DEFAULT_MODEL;
-  const systemPrompt = `You are a helpful and concise misinformation analysis assistant. Answer questions about claim confidence, evidence strength, watchlist alerts, and fact-checking workflow. If the user asks for a summary, keep it clear and actionable. Do not invent unsupported facts.
-When you produce the final answer, append a JSON object on a new line containing the following keys: \n- response: the assistant text summary (string)\n- confidence: an optional confidence label or percent (string or number)\n- sourceUrl: an optional primary source URL you used (string).\nReturn valid JSON on that final line when possible.`;
+  const systemPrompt = `You are a knowledgeable, conversational AI assistant specializing in misinformation analysis, fact-checking, and media literacy. You can answer:
+- General questions about how misinformation spreads, common patterns, and red flags to watch for
+- Fact-checking methodologies, source evaluation, and evidence credibility
+- Analysis of specific claims when details are provided by the user
+- Platform workflow guidance (watchlists, evidence submission, confidence scores)
+- Media literacy education and critical thinking techniques
+
+Always provide a helpful, substantive answer. Never reply with "I need more context" or "please provide claim details" — if specific context is missing, give a thorough general educational answer about the topic. Be direct and conversational.
+
+Return ONLY a valid JSON object with exactly these fields:
+{
+  "response": "your full conversational answer here (1-4 paragraphs)",
+  "confidence": null,
+  "sourceUrl": null
+}`;
 
   const payload = {
     model,
@@ -40,12 +53,13 @@ When you produce the final answer, append a JSON object on a new line containing
       { role: "system", content: systemPrompt },
       { role: "user", content: message },
     ],
-    max_tokens: 450,
-    temperature: 0.7,
+    max_tokens: 700,
+    temperature: 0.65,
+    response_format: { type: "json_object" },
   };
-  // Abort if Groq does not respond in a reasonable time
+
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
+  const timeout = setTimeout(() => controller.abort(), 20000);
 
   const response = await fetch(GROQ_API_URL, {
     method: "POST",
@@ -68,28 +82,20 @@ When you produce the final answer, append a JSON object on a new line containing
   }
 
   const data = await response.json().catch(() => ({}));
-  const text = data?.choices?.[0]?.message?.content ?? "I couldn't generate a response.";
+  const raw: string = data?.choices?.[0]?.message?.content ?? "";
 
-  // Try to extract a JSON object from the assistant output (last JSON line)
-  let parsed: { response?: string; confidence?: string | number; sourceUrl?: string } = {};
+  let parsed: { response?: string; confidence?: string | number | null; sourceUrl?: string | null } = {};
   try {
-    const jsonMatch = text.match(/\{[\s\S]*\}$/m);
-    if (jsonMatch) {
-      parsed = JSON.parse(jsonMatch[0]);
-      // If parsed.response is missing, use the remaining text (without the JSON tail)
-      if (!parsed.response) {
-        const trimmed = text.replace(jsonMatch[0], "").trim();
-        parsed.response = trimmed || parsed.response || "I couldn't generate a response.";
-      }
-    } else {
-      // No JSON found — return the raw assistant text
-      parsed.response = text;
-    }
+    parsed = JSON.parse(raw);
   } catch {
-    parsed.response = text;
+    parsed = { response: raw || "I couldn't generate a response." };
   }
 
-  return NextResponse.json({ response: parsed.response, confidence: parsed.confidence ?? null, sourceUrl: parsed.sourceUrl ?? null });
+  const responseText = typeof parsed.response === "string" && parsed.response.trim()
+    ? parsed.response.trim()
+    : "I couldn't generate a response.";
+
+  return NextResponse.json({ response: responseText, confidence: parsed.confidence ?? null, sourceUrl: parsed.sourceUrl ?? null });
 }
 
 export async function GET() {

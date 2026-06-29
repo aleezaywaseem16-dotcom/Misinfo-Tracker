@@ -91,6 +91,26 @@ function confidenceLabel(score: number): string {
   return 'LOW';
 }
 
+interface AIVerdict {
+  verdict: 'TRUE' | 'FALSE' | 'MISLEADING' | 'UNVERIFIED';
+  confidence: number;
+  explanation: string;
+  reasoning: string[];
+}
+
+const VERDICT_COLORS: Record<string, string> = {
+  TRUE: '#4ade80',
+  FALSE: '#f87171',
+  MISLEADING: '#fb923c',
+  UNVERIFIED: '#64748b',
+};
+const VERDICT_GLOWS: Record<string, string> = {
+  TRUE: 'rgba(74,222,128,0.18)',
+  FALSE: 'rgba(248,113,113,0.18)',
+  MISLEADING: 'rgba(251,146,60,0.18)',
+  UNVERIFIED: 'transparent',
+};
+
 interface ChatMessage {
   role: "user" | "assistant";
   text: string;
@@ -136,6 +156,8 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
   const [activeTab, setActiveTab] = useState<"evidence" | "comments">("evidence");
   const [watching, setWatching] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [aiVerdict, setAiVerdict] = useState<AIVerdict | null>(null);
+  const [verdictLoading, setVerdictLoading] = useState(true);
 
   // Switches the tab AND scrolls it into view — buttons that jump to a tab
   // from elsewhere on the page (sidebar, summary cards) live far from the
@@ -214,6 +236,21 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
   }, [id, loadClaim, loadEvidence, loadComments, refreshWatchState, loadVotes]);
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages]);
+
+  // Auto-fetch AI verdict when claim loads — fires once per claim id
+  useEffect(() => {
+    if (!claim) return;
+    setVerdictLoading(true);
+    fetch('/api/verdict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: claim.title, description: claim.description ?? '' }),
+    })
+      .then((r) => r.json())
+      .then((data) => { if (data.verdict) setAiVerdict(data as AIVerdict); })
+      .catch(() => {})
+      .finally(() => setVerdictLoading(false));
+  }, [claim?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function toggleWatch() {
     if (!userId) { setWatchError("Sign in to add claims to your watchlist."); return; }
@@ -451,6 +488,115 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
             )}
           </div>
         </div>
+
+        {/* ─── AI Verdict Card (auto-loads, full width) ─── */}
+        {(() => {
+          const vc = aiVerdict ? (VERDICT_COLORS[aiVerdict.verdict] ?? '#64748b') : 'var(--border-strong)';
+          const vg = aiVerdict ? (VERDICT_GLOWS[aiVerdict.verdict] ?? 'transparent') : 'transparent';
+          return (
+            <div style={{
+              marginBottom: '24px', borderRadius: '6px',
+              border: `1px solid ${verdictLoading ? 'var(--border-strong)' : vc}`,
+              boxShadow: (!verdictLoading && aiVerdict) ? `0 0 0 1px ${vc}22, 0 0 32px ${vg}` : 'none',
+              background: 'var(--bg-surface)', overflow: 'hidden',
+              transition: 'box-shadow 0.5s ease, border-color 0.5s ease',
+            }}>
+              {/* Card header */}
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '10px 20px',
+                borderBottom: `1px solid ${verdictLoading ? 'var(--border)' : vc + '30'}`,
+                background: (!verdictLoading && aiVerdict) ? vc + '08' : 'transparent',
+              }}>
+                <span style={{ fontSize: '0.6rem', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.18em', color: 'var(--text-muted)' }}>
+                  AI Verdict
+                </span>
+                <span style={{ fontSize: '0.58rem', fontFamily: 'var(--font-mono)', color: 'var(--text-disabled)', letterSpacing: '0.05em' }}>
+                  Llama 3.3-70B
+                </span>
+              </div>
+
+              {/* Card body */}
+              <div style={{ padding: '20px 24px' }}>
+                {verdictLoading ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                      <div className="v-skel" style={{ width: 96, height: 32, borderRadius: 4 }} />
+                      <div className="v-skel" style={{ width: 160, height: 14, borderRadius: 2 }} />
+                    </div>
+                    <div className="v-skel" style={{ width: '100%', height: 5, borderRadius: 3 }} />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+                      {['92%','78%','85%'].map((w, i) => <div key={i} className="v-skel" style={{ width: w, height: 11, borderRadius: 2 }} />)}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+                      {[...Array(3)].map((_, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                          <div className="v-skel" style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, marginTop: 3 }} />
+                          <div className="v-skel" style={{ flex: 1, height: 10, borderRadius: 2, maxWidth: `${65 + i * 10}%` }} />
+                        </div>
+                      ))}
+                    </div>
+                    <style>{`
+                      .v-skel {
+                        background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.04) 75%);
+                        background-size: 200% 100%;
+                        animation: v-shimmer 1.4s infinite;
+                      }
+                      @keyframes v-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+                    `}</style>
+                  </div>
+                ) : aiVerdict ? (
+                  <div>
+                    {/* Verdict badge + confidence number */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '14px', flexWrap: 'wrap' }}>
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '7px',
+                        padding: '7px 16px', borderRadius: '4px',
+                        background: vc + '18', border: `1px solid ${vc}50`,
+                        fontFamily: 'var(--font-mono)', fontSize: '0.88rem', fontWeight: 700, letterSpacing: '0.12em', color: vc,
+                      }}>
+                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: vc, flexShrink: 0 }} />
+                        {aiVerdict.verdict}
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                        <span style={{ fontSize: '1.7rem', fontWeight: 800, fontFamily: 'var(--font-display)', color: vc, lineHeight: 1, letterSpacing: '-0.03em' }}>
+                          {aiVerdict.confidence}%
+                        </span>
+                        <span style={{ fontSize: '0.6rem', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-muted)' }}>
+                          confidence
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Confidence bar */}
+                    <div style={{ height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden', marginBottom: '16px' }}>
+                      <div style={{ width: `${aiVerdict.confidence}%`, height: '100%', background: vc, borderRadius: 2, transition: 'width 0.8s ease' }} />
+                    </div>
+
+                    {/* Explanation */}
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.75, marginBottom: '14px' }}>
+                      {aiVerdict.explanation}
+                    </p>
+
+                    {/* Key reasoning bullets */}
+                    {aiVerdict.reasoning.length > 0 && (
+                      <ul style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: 0, margin: 0, listStyle: 'none' }}>
+                        {aiVerdict.reasoning.map((point, i) => (
+                          <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.55 }}>
+                            <span style={{ width: 5, height: 5, borderRadius: '50%', background: vc, flexShrink: 0, marginTop: 7 }} />
+                            {point}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ) : (
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>AI analysis unavailable.</p>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Two-column layout */}
         <div className="grid gap-6 lg:grid-cols-[1fr_360px]" style={{ alignItems: 'start' }}>

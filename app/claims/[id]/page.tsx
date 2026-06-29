@@ -62,11 +62,33 @@ function statusRiskText(status: string) {
 }
 
 function confidenceScore(status: string, evidenceCount: number, upvotes: number, downvotes: number): number {
-  const base: Record<string, number> = { confirmed: 70, investigating: 48, disputed: 38, unverified: 22, debunked: 10, archived: 18 };
-  const evidenceBonus = Math.min(evidenceCount * 5, 25);
-  const totalVotes = upvotes + downvotes;
-  const voteBonus = totalVotes > 0 ? Math.round((upvotes / totalVotes) * 15) : 0;
-  return Math.min(95, Math.max(5, (base[status] ?? 30) + evidenceBonus + voteBonus));
+  const evidenceBonus = evidenceCount * 10;
+  const voteBonus = (upvotes + downvotes) * 5;
+
+  if (status === 'debunked' || status === 'confirmed') {
+    return Math.min(99, Math.max(75, 75 + evidenceBonus + voteBonus));
+  }
+  if (status === 'investigating') {
+    return Math.min(60, Math.max(20, 20 + evidenceBonus + voteBonus));
+  }
+  if (status === 'unverified') {
+    return Math.min(30, Math.max(10, 10 + evidenceBonus + voteBonus));
+  }
+  // disputed / archived
+  const base: Record<string, number> = { disputed: 35, archived: 18 };
+  return Math.min(95, Math.max(5, (base[status] ?? 20) + evidenceBonus + voteBonus));
+}
+
+function confidenceColor(score: number): string {
+  if (score >= 75) return '#4ade80';
+  if (score >= 40) return '#fbbf24';
+  return '#f87171';
+}
+
+function confidenceLabel(score: number): string {
+  if (score >= 75) return 'HIGH';
+  if (score >= 40) return 'MED';
+  return 'LOW';
 }
 
 interface ChatMessage {
@@ -490,9 +512,14 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
               <div className="grid grid-cols-1 sm:grid-cols-3" style={{ gap: '12px', marginTop: '22px' }}>
                 <div className="card" style={{ padding: '14px 16px' }}>
                   <div className="eyebrow" style={{ marginBottom: '6px', fontSize: '0.62rem' }}>Confidence</div>
-                  <div className="data-num" style={{ fontSize: '1.5rem' }}>{confidence}%</div>
-                  <div style={{ height: 2, background: 'var(--border)', borderRadius: 2, overflow: 'hidden', marginTop: '8px' }}>
-                    <div style={{ width: `${confidence}%`, height: '100%', background: 'var(--accent)', borderRadius: 2, transition: 'width 0.6s ease' }} />
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                    <div className="data-num" style={{ fontSize: '1.5rem', color: confidenceColor(confidence) }}>{confidence}%</div>
+                    <span style={{ fontSize: '0.6rem', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.12em', color: confidenceColor(confidence) }}>
+                      {confidenceLabel(confidence)}
+                    </span>
+                  </div>
+                  <div style={{ height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden', marginTop: '8px' }}>
+                    <div style={{ width: `${confidence}%`, height: '100%', background: confidenceColor(confidence), borderRadius: 2, transition: 'width 0.6s ease' }} />
                   </div>
                 </div>
                 <div className="card" style={{ padding: '14px 16px' }}>
